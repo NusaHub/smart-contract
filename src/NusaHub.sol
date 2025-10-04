@@ -5,10 +5,28 @@ pragma solidity ^0.8.29;
 import {Project} from "./token/Project.sol";
 import {USDT} from "./token/USDT.sol";
 import {IDRX} from "./token/IDRX.sol";
-import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {ContextUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
+import {GovernorUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/GovernorUpgradeable.sol";
+import {GovernorCountingSimpleUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorCountingSimpleUpgradeable.sol";
+import {GovernorSettingsUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorSettingsUpgradeable.sol";
+import {GovernorVotesUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesUpgradeable.sol";
+import {GovernorVotesQuorumFractionUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesQuorumFractionUpgradeable.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-contract NusaHub is Ownable {
+contract NusaHub is
+    Initializable,
+    GovernorUpgradeable,
+    GovernorSettingsUpgradeable,
+    GovernorCountingSimpleUpgradeable,
+    GovernorVotesUpgradeable,
+    GovernorVotesQuorumFractionUpgradeable,
+    UUPSUpgradeable,
+    OwnableUpgradeable
+{
     //
     using SafeERC20 for IERC20;
 
@@ -20,11 +38,15 @@ contract NusaHub is Ownable {
 
     mapping(uint256 => GameProject) private _project;
     mapping(uint256 => mapping(address => Funding[])) private _fundings;
-    // mapping(uint256 => mapping(address => Allocation)) private _allocations;
 
     enum PaymentToken {
         USDT,
         IDRX
+    }
+
+    enum Progress {
+        GENERAL,
+        MONETARY
     }
 
     struct Funding {
@@ -33,12 +55,6 @@ contract NusaHub is Ownable {
         uint256 timestamp;
         uint256 percentage;
     }
-
-    // struct Allocation {
-    //     uint256 percentage;
-    //     uint256 milestoneStart;
-    //     uint256 currentMilestone;
-    // }
 
     struct GameProject {
         string name;
@@ -55,7 +71,30 @@ contract NusaHub is Ownable {
         string[] targets;
     }
 
-    constructor(address __owner) Ownable(__owner) {
+    /// @custom:oz-upgrades-unsafe-allow constructor
+    constructor() {
+        _disableInitializers();
+    }
+
+    function initialize(
+        IVotes __token,
+        address __owner,
+        uint32 __votingDelay,
+        uint32 __votingPeriod,
+        uint256 __proposalThreshold
+    ) public initializer {
+        __Governor_init("NusaHub");
+        __GovernorSettings_init(
+            __votingDelay,
+            __votingPeriod,
+            __proposalThreshold
+        );
+        __GovernorCountingSimple_init();
+        __GovernorVotes_init(__token);
+        __GovernorVotesQuorumFraction_init(1);
+        __UUPSUpgradeable_init();
+        __Ownable_init(__owner);
+
         IDRX idrx = new IDRX();
         USDT usdt = new USDT();
 
@@ -63,8 +102,12 @@ contract NusaHub is Ownable {
         _usdt = address(usdt);
     }
 
+    function _authorizeUpgrade(
+        address newImplementation
+    ) internal override onlyOwner {}
+
     function verifyIdentity(string memory __hash) external {
-        _identities[_getMsgSender()] = __hash;
+        _identities[_msgSender()] = __hash;
     }
 
     function postProject(
@@ -79,7 +122,7 @@ contract NusaHub is Ownable {
             __projectName,
             __projectSymbol,
             __fundingGoal,
-            _getMsgSender()
+            _msgSender()
         );
 
         _addToProject(
@@ -89,7 +132,7 @@ contract NusaHub is Ownable {
             __fundingGoal,
             __timestamps,
             __targets,
-            _getMsgSender()
+            _msgSender()
         );
     }
 
@@ -101,13 +144,15 @@ contract NusaHub is Ownable {
         address projectToken = _project[__projectId].token;
 
         _transferFundsToken(__fundAmount, __token);
-        _transferProjectToken(__fundAmount, projectToken, _getMsgSender());
-        _addFundings(__projectId, __fundAmount, __token, _getMsgSender());
+        _transferProjectToken(__fundAmount, projectToken, _msgSender());
+        _addFundings(__projectId, __fundAmount, __token, _msgSender());
     }
 
     function updateProgress(uint256 __projectId, uint256 __a) external {}
 
-    function withdrawFunds(uint256 __projectId) external {}
+    function withdrawFundsForDev(uint256 __projectId) external {}
+
+    function withdrawFundsForInvestor() external {}
 
     function cashOut(uint256 __projectId, uint256 __amount) external {}
 
@@ -126,6 +171,42 @@ contract NusaHub is Ownable {
 
     function getIdentity(address __user) external view returns (string memory) {
         return _identities[__user];
+    }
+
+    function proposalThreshold()
+        public
+        view
+        override(GovernorUpgradeable, GovernorSettingsUpgradeable)
+        returns (uint256)
+    {
+        return super.proposalThreshold();
+    }
+
+    function _msgSender()
+        internal
+        view
+        override(ContextUpgradeable)
+        returns (address)
+    {
+        return super._msgSender();
+    }
+
+    function _msgData()
+        internal
+        view
+        override(ContextUpgradeable)
+        returns (bytes calldata)
+    {
+        return super._msgData();
+    }
+
+    function _contextSuffixLength()
+        internal
+        view
+        override(ContextUpgradeable)
+        returns (uint256)
+    {
+        return super._contextSuffixLength();
     }
 
     function _generateProjectToken(
@@ -166,7 +247,7 @@ contract NusaHub is Ownable {
     ) private {
         uint256 percentage = _calculatePercentage(
             __projectId,
-            _getBlockTimestamp(),
+            _blockTimestamp(),
             __fundAmount
         );
 
@@ -174,7 +255,7 @@ contract NusaHub is Ownable {
             Funding({
                 token: __token,
                 amount: __fundAmount,
-                timestamp: _getBlockTimestamp(),
+                timestamp: _blockTimestamp(),
                 percentage: percentage
             })
         );
@@ -231,12 +312,8 @@ contract NusaHub is Ownable {
         return uint16(__token) == 0 ? address(_usdt) : address(_idrx);
     }
 
-    function _getBlockTimestamp() private view returns (uint256) {
+    function _blockTimestamp() private view returns (uint256) {
         return block.timestamp;
-    }
-
-    function _getMsgSender() private view returns (address) {
-        return msg.sender;
     }
     //
 }

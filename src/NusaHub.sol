@@ -15,10 +15,12 @@ contract NusaHub is Ownable {
     address private _idrx;
     address private _usdt;
 
-    mapping(uint256 => GameProject) private _project;
     mapping(address => string) private _identities;
     mapping(uint256 => mapping(uint256 => bool)) private _milestoneStatus;
-    mapping(uint256 => mapping(address => Funding)) private _fundings;
+
+    mapping(uint256 => GameProject) private _project;
+    mapping(uint256 => mapping(address => Funding[])) private _fundings;
+    // mapping(uint256 => mapping(address => Allocation)) private _allocations;
 
     enum PaymentToken {
         USDT,
@@ -29,7 +31,14 @@ contract NusaHub is Ownable {
         PaymentToken token;
         uint256 amount;
         uint256 timestamp;
+        uint256 percentage;
     }
+
+    // struct Allocation {
+    //     uint256 percentage;
+    //     uint256 milestoneStart;
+    //     uint256 currentMilestone;
+    // }
 
     struct GameProject {
         string name;
@@ -42,7 +51,7 @@ contract NusaHub is Ownable {
     }
 
     struct Milestone {
-        uint256[] timestamp;
+        uint256[] timestamps;
         string[] targets;
     }
 
@@ -55,7 +64,7 @@ contract NusaHub is Ownable {
     }
 
     function verifyIdentity(string memory __hash) external {
-        _identities[msg.sender] = __hash;
+        _identities[_getMsgSender()] = __hash;
     }
 
     function postProject(
@@ -70,7 +79,7 @@ contract NusaHub is Ownable {
             __projectName,
             __projectSymbol,
             __fundingGoal,
-            msg.sender
+            _getMsgSender()
         );
 
         _addToProject(
@@ -80,7 +89,7 @@ contract NusaHub is Ownable {
             __fundingGoal,
             __timestamps,
             __targets,
-            msg.sender
+            _getMsgSender()
         );
     }
 
@@ -91,10 +100,12 @@ contract NusaHub is Ownable {
     ) external {
         address projectToken = _project[__projectId].token;
 
-        _addFundings(__projectId, __fundAmount, __token, msg.sender);
         _transferFundsToken(__fundAmount, __token);
-        _transferProjectToken(__fundAmount, projectToken, msg.sender);
+        _transferProjectToken(__fundAmount, projectToken, _getMsgSender());
+        _addFundings(__projectId, __fundAmount, __token, _getMsgSender());
     }
+
+    function updateProgress(uint256 __projectId, uint256 __a) external {}
 
     function withdrawFunds(uint256 __projectId) external {}
 
@@ -104,6 +115,13 @@ contract NusaHub is Ownable {
         uint256 __projectId
     ) external view returns (GameProject memory) {
         return _project[__projectId];
+    }
+
+    function getFundingByUser(
+        uint256 __projectId,
+        address __user
+    ) external view returns (Funding[] memory) {
+        return _fundings[__projectId][__user];
     }
 
     function getIdentity(address __user) external view returns (string memory) {
@@ -146,10 +164,19 @@ contract NusaHub is Ownable {
         PaymentToken __token,
         address __funder
     ) private {
-        _fundings[__projectId][__funder] = Funding(
-            __token,
-            __fundAmount,
-            block.timestamp
+        uint256 percentage = _calculatePercentage(
+            __projectId,
+            _getBlockTimestamp(),
+            __fundAmount
+        );
+
+        _fundings[__projectId][__funder].push(
+            Funding({
+                token: __token,
+                amount: __fundAmount,
+                timestamp: _getBlockTimestamp(),
+                percentage: percentage
+            })
         );
     }
 
@@ -169,14 +196,47 @@ contract NusaHub is Ownable {
             fundsRaisedByUSDT: 0,
             fundsRaisedByIDRX: 0,
             owner: __owner,
-            milestone: Milestone({timestamp: __timestamps, targets: __targets})
+            milestone: Milestone({timestamps: __timestamps, targets: __targets})
         });
+    }
+
+    function _calculatePercentage(
+        uint256 __projectId,
+        uint256 __timestamp,
+        uint256 __fundAmount
+    ) private view returns (uint256) {
+        GameProject memory project = _project[__projectId];
+
+        uint256[] memory timestamps = project.milestone.timestamps;
+        uint256 totalMilestone = timestamps.length;
+        uint256 currentMilestone = 0;
+
+        for (uint256 i = 0; i < timestamps.length; i++) {
+            if (__timestamp < timestamps[i]) {
+                if (!_milestoneStatus[__projectId][i]) {
+                    currentMilestone = i;
+                    break;
+                }
+            }
+        }
+
+        uint256 percentage = __fundAmount / (totalMilestone - currentMilestone);
+
+        return percentage;
     }
 
     function _getPaymentTokenAddress(
         PaymentToken __token
     ) private view returns (address) {
         return uint16(__token) == 0 ? address(_usdt) : address(_idrx);
+    }
+
+    function _getBlockTimestamp() private view returns (uint256) {
+        return block.timestamp;
+    }
+
+    function _getMsgSender() private view returns (address) {
+        return msg.sender;
     }
     //
 }

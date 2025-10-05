@@ -2,7 +2,7 @@
 
 pragma solidity ^0.8.29;
 
-contract NusaDAO {
-    // 
-    //
+enum PaymentToken {
+    USDT,
+    IDRX
 }

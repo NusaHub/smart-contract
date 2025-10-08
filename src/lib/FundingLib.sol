@@ -45,12 +45,11 @@ library FundingLib {
 
     function distributeFunding(
         mapping(uint256 => GameProject) storage __project,
-        mapping(uint256 => mapping(uint256 => mapping(PaymentToken => uint256)))
+        mapping(uint256 => mapping(uint256 => uint256))
             storage __fundRaisedPerMilestone,
         uint256 __projectId,
         uint256 __currentMilestoneIndex,
-        uint256 __fundPerMilestone,
-        PaymentToken __token
+        uint256 __fundPerMilestone
     ) internal {
         uint256[] memory timestamps = __project[__projectId]
             .milestone
@@ -58,10 +57,7 @@ library FundingLib {
         uint256 totalMilestone = timestamps.length;
 
         for (uint256 j = __currentMilestoneIndex; j < totalMilestone; j++) {
-            uint256 milestoneTime = timestamps[j];
-            __fundRaisedPerMilestone[__projectId][milestoneTime][
-                __token
-            ] += __fundPerMilestone;
+            __fundRaisedPerMilestone[__projectId][j] += __fundPerMilestone;
         }
     }
     //

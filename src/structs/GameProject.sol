@@ -2,19 +2,15 @@
 
 pragma solidity ^0.8.29;
 
+import {PaymentToken} from "../enums/PaymentToken.sol";
+import {ProjectMilestone} from "./ProjectMilestone.sol";
+
 struct GameProject {
     string name;
     address token;
-    address governor;
     uint256 fundingGoal;
-    uint256 fundRaisedByIDRX;
-    uint256 fundRaisedByUSDT;
+    PaymentToken paymentToken;
+    uint256 fundRaised;
     address owner;
     ProjectMilestone milestone;
 }
-
-struct ProjectMilestone {
-    uint256[] timestamps;
-    string[] targets;
-}
-

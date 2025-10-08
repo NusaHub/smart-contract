@@ -2,13 +2,20 @@
 
 pragma solidity ^0.8.29;
 
-import {ProjectDAO} from "./dao/ProjectDAO.sol";
-import {Project} from "./token/Project.sol";
-import {USDT} from "./token/USDT.sol";
-import {IDRX} from "./token/IDRX.sol";
+import {Project} from "./tokens/Project.sol";
+import {USDT} from "./tokens/USDT.sol";
+import {IDRX} from "./tokens/IDRX.sol";
 import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import {ContextUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {GovernorUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/GovernorUpgradeable.sol";
+import {GovernorCountingSimpleUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorCountingSimpleUpgradeable.sol";
+import {GovernorSettingsUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorSettingsUpgradeable.sol";
+import {GovernorVotesUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesUpgradeable.sol";
+import {GovernorVotesQuorumFractionUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesQuorumFractionUpgradeable.sol";
+import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import {FactoryLib} from "./lib/FactoryLib.sol";
@@ -20,7 +27,15 @@ import {Progress} from "./structs/Progress.sol";
 import {PaymentToken} from "./enums/PaymentToken.sol";
 import {ProgressType} from "./enums/ProgressType.sol";
 
-contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
+contract NusaHub is
+    Initializable,
+    GovernorUpgradeable,
+    GovernorSettingsUpgradeable,
+    GovernorCountingSimpleUpgradeable,
+    GovernorVotesUpgradeable,
+    GovernorVotesQuorumFractionUpgradeable,
+    UUPSUpgradeable
+{
     //
     using SafeERC20 for IERC20;
     using MilestoneLib for mapping(uint256 => mapping(uint256 => bool));
@@ -28,13 +43,11 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     address private _idrx;
     address private _usdt;
 
-    mapping(address => string) private _identities;
     mapping(uint256 => mapping(uint256 => bool)) private _milestoneStatus;
 
     mapping(uint256 => GameProject) private _project;
-    mapping(uint256 => mapping(address => mapping(PaymentToken => Funding[])))
-        private _fundings;
-    mapping(uint256 => mapping(uint256 => mapping(PaymentToken => uint256)))
+    mapping(uint256 => mapping(address => Funding[])) private _fundings;
+    mapping(uint256 => mapping(uint256 => uint256))
         private _fundRaisedPerMilestone;
     mapping(uint256 => mapping(uint256 => Progress)) private _progresses;
 
@@ -43,9 +56,13 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(address __owner) public initializer {
+    function initialize(IVotes __token) public initializer {
+        __Governor_init("NusaHub Governor");
+        __GovernorSettings_init(5, 25, 0);
+        __GovernorCountingSimple_init();
+        __GovernorVotes_init(__token);
+        __GovernorVotesQuorumFraction_init(1);
         __UUPSUpgradeable_init();
-        __Ownable_init(__owner);
 
         IDRX idrx = new IDRX();
         USDT usdt = new USDT();
@@ -54,18 +71,13 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         _usdt = address(usdt);
     }
 
-    function _authorizeUpgrade(
-        address newImplementation
-    ) internal override onlyOwner {}
-
-    function verifyIdentity(string memory __hash) external {
-        _identities[_msgSender()] = __hash;
-    }
+    function _authorizeUpgrade(address newImplementation) internal override {}
 
     function postProject(
         uint256 __projectId,
         string memory __projectName,
         string memory __projectSymbol,
+        PaymentToken __paymentToken,
         uint256 __fundingGoal,
         uint256[] memory __timestamps,
         string[] memory __targets
@@ -76,16 +88,11 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             __fundingGoal
         );
 
-        address governorAddress = FactoryLib.generateProjectDAO(
-            tokenAddress,
-            string.concat(__projectName, " DAO")
-        );
-
         _addToProject(
             __projectId,
             __projectName,
+            __paymentToken,
             tokenAddress,
-            governorAddress,
             __fundingGoal,
             __timestamps,
             __targets,
@@ -93,74 +100,123 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         );
     }
 
-    function fundProject(
-        uint256 __projectId,
-        uint256 __fundAmount,
-        PaymentToken __token
-    ) external {
+    function fundProject(uint256 __projectId, uint256 __fundAmount) external {
         address projectToken = _project[__projectId].token;
+        PaymentToken token = _project[__projectId].paymentToken;
 
-        _addFundings(__projectId, __fundAmount, __token, _msgSender());
-        _transferFundsToken(__fundAmount, __token);
-        _transferProjectToken(__fundAmount, projectToken, _msgSender());
+        _addFundings(__projectId, __fundAmount, _msgSender());
+        _escrowFundsToken(__fundAmount, token);
+        _transferTokenFromContract(__fundAmount, projectToken, _msgSender());
     }
 
     function updateProgress(
         uint256 __projectId,
-        string memory __text,
-        uint256 __amountIDRX,
-        uint256 __amountUSDT,
+        uint256 __amount,
         ProgressType __type,
         address[] memory __targets,
         uint256[] memory __values,
         bytes[] memory __calldatas,
         string memory __description
     ) external {
-        _addProgress(__projectId, __type, __text, __amountIDRX, __amountUSDT);
-
-        address payable dao = payable(_project[__projectId].governor);
-
-        uint256 proposalId = ProjectDAO(dao).propose(
+        uint256 proposalId = propose(
             __targets,
             __values,
             __calldatas,
             __description
         );
 
-        // uint256 proposalId = propose();
+        _addProgress(__projectId, __type, __description, __amount, proposalId);
     }
 
-    function withdrawFundsForDev(uint256 __projectId) external {
+    // cek ini escrow funds token karena dipanggil oleh kontrak
+    function processProgress(uint256 __projectId, uint256 __amount) external {
+        if (__amount != 0) {
+            PaymentToken token = _project[__projectId].paymentToken;
+            _escrowFundsToken(__amount, token);
+        }
+        _withdrawFundsForDev(__projectId);
+    }
+
+    function withdrawFundsForInvestor(uint256 __projectId) external {
+        for (
+            uint256 i = 0;
+            i < _fundings[__projectId][_msgSender()].length;
+            i++
+        ) {
+            Funding memory funding = _fundings[__projectId][_msgSender()][i];
+
+            uint256 milestoneTimestampIndex = _milestoneStatus.search(
+                __projectId,
+                _projectTimestamps(__projectId)
+            );
+
+            uint256 amount = _progresses[__projectId][milestoneTimestampIndex]
+                .amount;
+
+            uint256 withdrawAmount = (funding.percentageFundAmount * amount) /
+                100;
+            PaymentToken token = _project[__projectId].paymentToken;
+
+            _transferTokenFromContract(
+                withdrawAmount,
+                _getPaymentTokenAddress(token),
+                _msgSender()
+            );
+        }
+    }
+
+    // cek ini mau dibikin alure gini ato ada yang lain
+    function _withdrawFundsForDev(uint256 __projectId) private {
         uint256 milestoneIndex = _milestoneStatus.search(
             __projectId,
             _projectTimestamps(__projectId)
         );
 
-        uint256 fundAmountByIDRX = getFundRaisedPerMilestone(
+        uint256 fundAmount = getFundRaisedPerMilestone(
             __projectId,
-            milestoneIndex,
-            PaymentToken.IDRX
+            milestoneIndex
         );
-        uint256 fundAmountByUSDT = getFundRaisedPerMilestone(
-            __projectId,
-            milestoneIndex,
-            PaymentToken.USDT
+
+        PaymentToken token = _project[__projectId].paymentToken;
+
+        _transferTokenFromContract(
+            fundAmount,
+            _getPaymentTokenAddress(token),
+            _msgSender()
         );
 
         _milestoneStatus[__projectId][milestoneIndex] = true;
-
-        if (fundAmountByIDRX != 0) {
-            // _transferFundsToken(fundAmountByIDRX, PaymentToken.IDRX);
-        }
-
-        if (fundAmountByUSDT != 0) {
-            // _transferFundsToken(fundAmountByUSDT, PaymentToken.USDT);
-        }
     }
 
-    function withdrawFundsForInvestor(uint256 __projectId) external {}
+    function cashOut(uint256 __projectId) external {
+        PaymentToken token = _project[__projectId].paymentToken;
+        uint256 totalMilestone = _project[__projectId]
+            .milestone
+            .timestamps
+            .length;
+        uint256 milestoneIndex = _milestoneStatus.search(
+            __projectId,
+            _projectTimestamps(__projectId)
+        );
+        uint256 remainingMilestone = totalMilestone - milestoneIndex;
 
-    function cashOut(uint256 __projectId, uint256 __amount) external {}
+        for (
+            uint256 i = 0;
+            i < _fundings[__projectId][_msgSender()].length;
+            i++
+        ) {
+            Funding memory funding = _fundings[__projectId][_msgSender()][i];
+
+            uint256 cashOutAmount = funding.fundPerMilestone *
+                remainingMilestone;
+
+            _transferTokenFromContract(
+                cashOutAmount,
+                _getPaymentTokenAddress(token),
+                _msgSender()
+            );
+        }
+    }
 
     function getProject(
         uint256 __projectId
@@ -170,22 +226,22 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
 
     function getFundingByUser(
         uint256 __projectId,
-        address __user,
-        PaymentToken __token
+        address __user
     ) external view returns (Funding[] memory) {
-        return _fundings[__projectId][__user][__token];
-    }
-
-    function getIdentity(address __user) external view returns (string memory) {
-        return _identities[__user];
+        return _fundings[__projectId][__user];
     }
 
     function getFundRaisedPerMilestone(
         uint256 __projectId,
-        uint256 __milestoneIndex,
-        PaymentToken __token
+        uint256 __milestoneIndex
     ) public view returns (uint256) {
-        return _fundRaisedPerMilestone[__projectId][__milestoneIndex][__token];
+        return _fundRaisedPerMilestone[__projectId][__milestoneIndex];
+    }
+
+    function getPaymentToken(
+        uint256 __projectId
+    ) public view returns (PaymentToken) {
+        return _project[__projectId].paymentToken;
     }
 
     function _msgSender()
@@ -197,19 +253,28 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         return super._msgSender();
     }
 
-    function _transferProjectToken(
+    function proposalThreshold()
+        public
+        view
+        override(GovernorUpgradeable, GovernorSettingsUpgradeable)
+        returns (uint256)
+    {
+        return super.proposalThreshold();
+    }
+
+    function _transferTokenFromContract(
         uint256 __fundAmount,
-        address __projectToken,
+        address __token,
         address __receiver
     ) private {
-        IERC20(__projectToken).safeTransferFrom(
+        IERC20(__token).safeTransferFrom(
             address(this),
             __receiver,
             __fundAmount
         );
     }
 
-    function _transferFundsToken(
+    function _escrowFundsToken(
         uint256 __fundAmount,
         PaymentToken __token
     ) private {
@@ -220,7 +285,6 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
     function _addFundings(
         uint256 __projectId,
         uint256 __fundAmount,
-        PaymentToken __token,
         address __funder
     ) private {
         (
@@ -240,30 +304,28 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
             _fundRaisedPerMilestone,
             __projectId,
             currentMilestoneIndex,
-            fundPerMilestone,
-            __token
+            fundPerMilestone
         );
 
-        _fundings[__projectId][__funder][__token].push(
+        _fundings[__projectId][__funder].push(
             Funding({
                 amount: __fundAmount,
                 timestamp: _blockTimestamp(),
                 startMilestone: currentMilestoneIndex,
+                fundPerMilestone: fundPerMilestone,
                 percentagePerMilestone: percentagePerMilestone,
                 percentageFundAmount: percentageFundAmount
             })
         );
 
-        __token == PaymentToken.IDRX
-            ? _project[__projectId].fundRaisedByIDRX += __fundAmount
-            : _project[__projectId].fundRaisedByUSDT += __fundAmount;
+        _project[__projectId].fundRaised += __fundAmount;
     }
 
     function _addToProject(
         uint256 __projectId,
         string memory __projectName,
+        PaymentToken __paymentToken,
         address __token,
-        address __governor,
         uint256 __fundingGoal,
         uint256[] memory __timestamps,
         string[] memory __targets,
@@ -272,10 +334,9 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         _project[__projectId] = GameProject({
             name: __projectName,
             token: __token,
-            governor: __governor,
+            paymentToken: __paymentToken,
             fundingGoal: __fundingGoal,
-            fundRaisedByIDRX: 0,
-            fundRaisedByUSDT: 0,
+            fundRaised: 0,
             owner: __owner,
             milestone: ProjectMilestone({
                 timestamps: __timestamps,
@@ -288,8 +349,8 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         uint256 __projectId,
         ProgressType __type,
         string memory __text,
-        uint256 __amountIDRX,
-        uint256 __amountUSDT
+        uint256 __amount,
+        uint256 __proposalId
     ) private {
         uint256 milestoneTimestampIndex = _milestoneStatus.search(
             __projectId,
@@ -299,9 +360,8 @@ contract NusaHub is Initializable, UUPSUpgradeable, OwnableUpgradeable {
         _progresses[__projectId][milestoneTimestampIndex] = Progress({
             progressType: __type,
             text: __text,
-            milestoneIndex: milestoneTimestampIndex,
-            amountIDRX: __amountIDRX,
-            amountUSDT: __amountUSDT
+            amount: __amount,
+            proposalId: __proposalId
         });
     }
 

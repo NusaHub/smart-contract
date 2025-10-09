@@ -2,30 +2,7 @@
 
 pragma solidity ^0.8.29;
 
-import {Project} from "./tokens/Project.sol";
-import {USDT} from "./tokens/USDT.sol";
-import {IDRX} from "./tokens/IDRX.sol";
-import {OwnableUpgradeable} from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {ContextUpgradeable} from "@openzeppelin/contracts-upgradeable/utils/ContextUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {GovernorUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/GovernorUpgradeable.sol";
-import {GovernorCountingSimpleUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorCountingSimpleUpgradeable.sol";
-import {GovernorSettingsUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorSettingsUpgradeable.sol";
-import {GovernorVotesUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesUpgradeable.sol";
-import {GovernorVotesQuorumFractionUpgradeable} from "@openzeppelin/contracts-upgradeable/governance/extensions/GovernorVotesQuorumFractionUpgradeable.sol";
-import {IVotes} from "@openzeppelin/contracts/governance/utils/IVotes.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import {FactoryLib} from "./lib/FactoryLib.sol";
-import {MilestoneLib} from "./lib/MilestoneLib.sol";
-import {FundingLib} from "./lib/FundingLib.sol";
-import {Funding} from "./structs/Funding.sol";
-import {GameProject, ProjectMilestone} from "./structs/GameProject.sol";
-import {Progress} from "./structs/Progress.sol";
-import {PaymentToken} from "./enums/PaymentToken.sol";
-import {ProgressType} from "./enums/ProgressType.sol";
+import "./Imports.sol";
 
 contract NusaHub is
     Initializable,
@@ -75,12 +52,12 @@ contract NusaHub is
 
     function postProject(
         uint256 __projectId,
-        string memory __projectName,
-        string memory __projectSymbol,
+        string calldata __projectName,
+        string calldata __projectSymbol,
         PaymentToken __paymentToken,
         uint256 __fundingGoal,
-        uint256[] memory __timestamps,
-        string[] memory __targets
+        uint256[] calldata __timestamps,
+        string[] calldata __targets
     ) external {
         address tokenAddress = FactoryLib.generateProjectToken(
             __projectName,
@@ -98,15 +75,30 @@ contract NusaHub is
             __targets,
             _msgSender()
         );
+
+        emit GameProjectEvent.ProjectPosted(
+            __projectId,
+            _msgSender(),
+            __projectName,
+            __fundingGoal
+        );
     }
 
     function fundProject(uint256 __projectId, uint256 __fundAmount) external {
-        address projectToken = _project[__projectId].token;
-        PaymentToken token = _project[__projectId].paymentToken;
+        GameProject memory project = _project[__projectId];
+        address projectToken = project.token;
+        PaymentToken token = project.paymentToken;
 
         _addFundings(__projectId, __fundAmount, _msgSender());
         _escrowFundsToken(__fundAmount, token);
         _transferTokenFromContract(__fundAmount, projectToken, _msgSender());
+
+        emit FundingEvent.ProjectFunded(
+            __projectId,
+            _msgSender(),
+            __fundAmount,
+            _blockTimestamp()
+        );
     }
 
     function updateProgress(
@@ -126,15 +118,25 @@ contract NusaHub is
         );
 
         _addProgress(__projectId, __type, __description, __amount, proposalId);
-    }
 
-    // cek ini escrow funds token karena dipanggil oleh kontrak
-    function processProgress(uint256 __projectId, uint256 __amount) external {
         if (__amount != 0) {
             PaymentToken token = _project[__projectId].paymentToken;
             _escrowFundsToken(__amount, token);
         }
+
+        emit ProgressEvent.ProgressUpdated(
+            __projectId,
+            __amount,
+            proposalId,
+            _blockTimestamp()
+        );
+    }
+
+    // cek ini escrow funds token karena dipanggil oleh kontrak
+    function processProgress(uint256 __projectId) external onlyGovernance {
         _withdrawFundsForDev(__projectId);
+
+        emit ProgressEvent.ProgressProcessed(__projectId);
     }
 
     function withdrawFundsForInvestor(uint256 __projectId) external {
@@ -165,7 +167,6 @@ contract NusaHub is
         }
     }
 
-    // cek ini mau dibikin alure gini ato ada yang lain
     function _withdrawFundsForDev(uint256 __projectId) private {
         uint256 milestoneIndex = _milestoneStatus.search(
             __projectId,

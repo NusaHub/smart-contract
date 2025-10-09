@@ -3,7 +3,7 @@
 pragma solidity ^0.8.29;
 
 import {GameProject} from "../structs/GameProject.sol";
-import {MilestoneLib} from "../lib/MilestoneLib.sol";
+import {MilestoneLib} from "../libraries/MilestoneLib.sol";
 import {PaymentToken} from "../enums/PaymentToken.sol";
 
 library FundingLib {

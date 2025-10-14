@@ -10,5 +10,17 @@ library FundingEvent {
         uint256 fundAmount,
         uint256 timestamp
     );
+
+    event CashedOut(
+        uint256 indexed projectId,
+        address indexed funder,
+        uint256 amount
+    );
+
+    event FundsWithdrawn(
+        uint256 indexed projectId,
+        address indexed withdrawer,
+        uint256 amount
+    );
     //
 }

@@ -28,13 +28,11 @@ contract NUSA is
 
     function initialize(
         string memory __name,
-        string memory __symbol,
-        uint256 __amount
+        string memory __symbol
     ) public initializer {
         __ERC20_init(__name, __symbol);
         __ERC20Permit_init(__name);
         __UUPSUpgradeable_init();
-        _mint(msg.sender, __amount * (10 ** decimals()));
     }
 
     function delegate(string memory __hash) external {
@@ -46,12 +44,20 @@ contract NUSA is
         return _identities[__user];
     }
 
+    function mint(address __recipient, uint256 __amount) external {
+        _mint(__recipient, __amount);
+    }
+
+    function burn(address __user, uint256 __amount) external {
+        _burn(__user, __amount);
+    }
+
     function _update(
-        address _from,
-        address _to,
-        uint256 _amount
+        address __from,
+        address __to,
+        uint256 __amount
     ) internal override(ERC20Upgradeable, ERC20VotesUpgradeable) {
-        super._update(_from, _to, _amount);
+        super._update(__from, __to, __amount);
     }
 
     function nonces(

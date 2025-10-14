@@ -15,7 +15,7 @@ library FundingLib {
         mapping(uint256 => mapping(uint256 => bool)) storage __milestoneStatus,
         uint256 __projectId,
         uint256 __fundAmount
-    ) internal view returns (uint256, uint256, uint256, uint256) {
+    ) internal view returns (uint256, uint256, uint256) {
         GameProject memory project = __project[__projectId];
 
         uint256 fundingGoal = project.fundingGoal;
@@ -37,7 +37,6 @@ library FundingLib {
 
         return (
             currentMilestoneTimestampIndex,
-            percentagePerMilestone,
             fundPerMilestone,
             percentageFundAmount
         );

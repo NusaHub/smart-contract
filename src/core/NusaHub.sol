@@ -11,7 +11,8 @@ contract NusaHub is
     GovernorCountingSimpleUpgradeable,
     GovernorVotesUpgradeable,
     GovernorVotesQuorumFractionUpgradeable,
-    UUPSUpgradeable
+    UUPSUpgradeable,
+    ReentrancyGuardUpgradeable
 {
     //
     using SafeERC20 for IERC20;
@@ -25,8 +26,10 @@ contract NusaHub is
     mapping(uint256 => mapping(address => Funding)) private _fundings;
     mapping(uint256 => mapping(uint256 => Progress)) private _progresses;
 
+    mapping(uint256 => mapping(address => bool)) private _investors;
     mapping(uint256 => mapping(uint256 => bool)) private _milestoneStatus;
-    mapping(uint256 => mapping(address => bool)) private _hasWithdrawn;
+    mapping(uint256 => mapping(uint256 => mapping(address => bool)))
+        private _hasWithdrawn;
     mapping(uint256 => mapping(uint256 => uint256))
         private _fundRaisedPerMilestone;
 
@@ -44,6 +47,61 @@ contract NusaHub is
         require(
             project.fundingGoal != 0 && project.token != address(0),
             GameProjectError.GameProjectNotRegistered()
+        );
+        _;
+    }
+
+    modifier onlyProjectCreator(uint256 __projectId, address __caller) {
+        GameProject memory project = _project[__projectId];
+        require(
+            project.owner == __caller,
+            GameProjectError.UnauthorizedCaller(__projectId, __caller)
+        );
+        _;
+    }
+
+    modifier onlyProjectInvestor(uint256 __projectId, address __caller) {
+        bool investorStatus = _investors[__projectId][__caller];
+        require(
+            investorStatus,
+            GameProjectError.UnauthorizedCaller(__projectId, __caller)
+        );
+        _;
+    }
+
+    modifier onlyIfMilestoneDone(uint256 __projectId) {
+        uint256 milestoneTimestampIndex = _milestoneStatus.search(
+            __projectId,
+            _projectTimestamps(__projectId)
+        );
+        bool milestoneStatus = _milestoneStatus[__projectId][
+            milestoneTimestampIndex
+        ];
+        require(
+            milestoneStatus,
+            ProgressError.IncompleteMilestone(
+                __projectId,
+                milestoneTimestampIndex
+            )
+        );
+        _;
+    }
+
+    modifier onlyOnceWithdraw(
+        uint256 __projectId,
+        uint256 __milestoneTimestampIndex,
+        address __caller
+    ) {
+        bool withdrawStatus = _hasWithdrawn[__projectId][
+            __milestoneTimestampIndex
+        ][__caller];
+        require(
+            !withdrawStatus,
+            ProgressError.AlreadyWithdrawn(
+                __projectId,
+                __milestoneTimestampIndex,
+                __caller
+            )
         );
         _;
     }
@@ -111,12 +169,14 @@ contract NusaHub is
     ) external onlyRegisteredProject(__projectId) {
         GameProject memory project = _project[__projectId];
         address projectToken = project.token;
-        PaymentToken token = project.paymentToken;
+        PaymentToken paymentToken = project.paymentToken;
 
         _addFundings(__projectId, __fundAmount, _msgSender());
-        _escrowFundsToken(__fundAmount, token);
+        _escrowFundsToken(__fundAmount, paymentToken);
         _transferTokenFromContract(__fundAmount, projectToken, _msgSender());
         _mintNusa(_msgSender(), __fundAmount);
+
+        _investors[__projectId][_msgSender()] = true;
 
         emit FundingEvent.ProjectFunded(
             __projectId,
@@ -134,7 +194,11 @@ contract NusaHub is
         uint256[] memory __values,
         bytes[] memory __calldatas,
         string memory __description
-    ) external onlyRegisteredProject(__projectId) {
+    )
+        external
+        onlyRegisteredProject(__projectId)
+        onlyProjectCreator(__projectId, _msgSender())
+    {
         uint256 proposalId = propose(
             __targets,
             __values,
@@ -145,8 +209,8 @@ contract NusaHub is
         _addProgress(__projectId, __type, __description, __amount, proposalId);
 
         if (__amount != 0) {
-            PaymentToken token = _project[__projectId].paymentToken;
-            _escrowFundsToken(__amount, token);
+            PaymentToken paymentToken = _project[__projectId].paymentToken;
+            _escrowFundsToken(__amount, paymentToken);
         }
 
         emit ProgressEvent.ProgressUpdated(
@@ -157,7 +221,26 @@ contract NusaHub is
         );
     }
 
-    function voteMilestone(uint256 __projectId) external {}
+    function voteMilestone(
+        uint256 __projectId,
+        uint8 __vote
+    )
+        external
+        onlyRegisteredProject(__projectId)
+        onlyProjectInvestor(__projectId, _msgSender())
+        returns (uint256)
+    {
+        uint256 milestoneTimestampIndex = _milestoneStatus.search(
+            __projectId,
+            _projectTimestamps(__projectId)
+        );
+        uint256 proposalId = _progresses[__projectId][milestoneTimestampIndex]
+            .proposalId;
+
+        emit ProgressEvent.VoteCasted(__projectId, __vote);
+
+        return super.castVote(proposalId, __vote);
+    }
 
     function processProgress(uint256 __projectId) external onlyGovernance {
         _withdrawFundsForDev(__projectId);
@@ -166,24 +249,35 @@ contract NusaHub is
     }
 
     function withdrawFundsForInvestor(
-        uint256 __projectId
-    ) external onlyRegisteredProject(__projectId) {
+        uint256 __projectId,
+        uint256 __milestoneTimestampIndex
+    )
+        external
+        onlyRegisteredProject(__projectId)
+        onlyIfMilestoneDone(__projectId)
+        onlyProjectInvestor(__projectId, _msgSender())
+        onlyOnceWithdraw(__projectId, __milestoneTimestampIndex, _msgSender())
+    {
         Funding memory funding = _fundings[__projectId][_msgSender()];
-        uint256 milestoneTimestampIndex = _milestoneStatus.search(
-            __projectId,
-            _projectTimestamps(__projectId)
-        );
-        uint256 amount = _progresses[__projectId][milestoneTimestampIndex]
+        // uint256 milestoneTimestampIndex = _milestoneStatus.search(
+        //     __projectId,
+        //     _projectTimestamps(__projectId)
+        // );
+        uint256 amount = _progresses[__projectId][__milestoneTimestampIndex]
             .amount;
         uint256 withdrawAmount = (funding.percentageFundAmount * amount) / 100;
-        PaymentToken token = _project[__projectId].paymentToken;
+        PaymentToken paymentToken = _project[__projectId].paymentToken;
 
         _transferTokenFromContract(
             withdrawAmount,
-            _getPaymentTokenAddress(token),
+            _getPaymentTokenAddress(paymentToken),
             _msgSender()
         );
         _burnNusa(_msgSender(), withdrawAmount);
+
+        _hasWithdrawn[__projectId][__milestoneTimestampIndex][
+            _msgSender()
+        ] = true;
 
         emit FundingEvent.FundsWithdrawn(
             __projectId,
@@ -192,51 +286,35 @@ contract NusaHub is
         );
     }
 
-    function _withdrawFundsForDev(uint256 __projectId) private {
-        uint256 milestoneIndex = _milestoneStatus.search(
-            __projectId,
-            _projectTimestamps(__projectId)
-        );
-
-        uint256 fundAmount = getFundRaisedPerMilestone(
-            __projectId,
-            milestoneIndex
-        );
-
-        PaymentToken token = _project[__projectId].paymentToken;
-
-        _transferTokenFromContract(
-            fundAmount,
-            _getPaymentTokenAddress(token),
-            _msgSender()
-        );
-
-        _milestoneStatus[__projectId][milestoneIndex] = true;
-    }
-
     function cashOut(
         uint256 __projectId
-    ) external onlyRegisteredProject(__projectId) {
-        PaymentToken token = _project[__projectId].paymentToken;
+    )
+        external
+        onlyRegisteredProject(__projectId)
+        onlyProjectInvestor(__projectId, _msgSender())
+    {
+        PaymentToken paymentToken = _project[__projectId].paymentToken;
         uint256 totalMilestone = _project[__projectId]
             .milestone
             .timestamps
             .length;
-        uint256 milestoneIndex = _milestoneStatus.search(
+        uint256 milestoneTimestampIndex = _milestoneStatus.search(
             __projectId,
             _projectTimestamps(__projectId)
         );
-        uint256 remainingMilestone = totalMilestone - milestoneIndex;
+        uint256 remainingMilestone = totalMilestone - milestoneTimestampIndex;
 
         Funding memory funding = _fundings[__projectId][_msgSender()];
         uint256 cashOutAmount = funding.fundPerMilestone * remainingMilestone;
 
         _transferTokenFromContract(
             cashOutAmount,
-            _getPaymentTokenAddress(token),
+            _getPaymentTokenAddress(paymentToken),
             _msgSender()
         );
         _burnNusa(_msgSender(), cashOutAmount);
+
+        _investors[__projectId][_msgSender()] = false;
 
         emit FundingEvent.CashedOut(__projectId, _msgSender(), cashOutAmount);
     }
@@ -256,9 +334,9 @@ contract NusaHub is
 
     function getFundRaisedPerMilestone(
         uint256 __projectId,
-        uint256 __milestoneIndex
+        uint256 __milestoneTimestampIndex
     ) public view returns (uint256) {
-        return _fundRaisedPerMilestone[__projectId][__milestoneIndex];
+        return _fundRaisedPerMilestone[__projectId][__milestoneTimestampIndex];
     }
 
     function getPaymentToken(
@@ -285,12 +363,37 @@ contract NusaHub is
         return super.proposalThreshold();
     }
 
-    function _mintNusa(address __recipient, uint256 __amount) private {
+    function _mintNusa(
+        address __recipient,
+        uint256 __amount
+    ) private nonReentrant {
         NUSA(_nusa).mint(__recipient, __amount);
     }
 
-    function _burnNusa(address __user, uint256 __amount) private {
+    function _burnNusa(address __user, uint256 __amount) private nonReentrant {
         NUSA(_nusa).burn(__user, __amount);
+    }
+
+    function _withdrawFundsForDev(uint256 __projectId) private {
+        uint256 milestoneTimestampIndex = _milestoneStatus.search(
+            __projectId,
+            _projectTimestamps(__projectId)
+        );
+
+        uint256 fundAmount = getFundRaisedPerMilestone(
+            __projectId,
+            milestoneTimestampIndex
+        );
+
+        PaymentToken paymentToken = _project[__projectId].paymentToken;
+
+        _transferTokenFromContract(
+            fundAmount,
+            _getPaymentTokenAddress(paymentToken),
+            _msgSender()
+        );
+
+        _milestoneStatus[__projectId][milestoneTimestampIndex] = true;
     }
 
     function _transferTokenFromContract(
@@ -319,7 +422,7 @@ contract NusaHub is
         address __funder
     ) private {
         (
-            uint256 currentMilestoneIndex,
+            uint256 currentmilestoneTimestampIndex,
             uint256 fundPerMilestone,
             uint256 percentageFundAmount
         ) = FundingLib.calculateFunding(
@@ -333,7 +436,7 @@ contract NusaHub is
             _project,
             _fundRaisedPerMilestone,
             __projectId,
-            currentMilestoneIndex,
+            currentmilestoneTimestampIndex,
             fundPerMilestone
         );
 

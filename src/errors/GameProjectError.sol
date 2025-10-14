@@ -6,5 +6,6 @@ library GameProjectError {
     //
     error GameProjectAlreadyRegistered(uint256 projectId);
     error GameProjectNotRegistered();
+    error UnauthorizedCaller(uint256 projectId, address caller);
     //
 }

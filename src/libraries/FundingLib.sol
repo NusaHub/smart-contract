@@ -8,6 +8,7 @@ import {Progress} from "../structs/Progress.sol";
 import {ProgressLib} from "../libraries/ProgressLib.sol";
 import {PaymentToken} from "../enums/PaymentToken.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import {console} from "forge-std/console.sol";
 
 library FundingLib {
     //
@@ -47,12 +48,8 @@ library FundingLib {
 
         Funding storage funding = __fundings[__projectId][__funder];
 
-        if (funding.amount == 0) {
-            funding.timestamp = block.timestamp;
-            funding.fundPerMilestone = fundPerMilestone;
-            funding.percentageFundAmount = percentageFundAmount;
-        }
-
+        funding.fundPerMilestone += fundPerMilestone;
+        funding.percentageFundAmount += percentageFundAmount;
         funding.amount += __fundAmount;
     }
 
@@ -61,7 +58,7 @@ library FundingLib {
         mapping(uint256 => mapping(uint256 => bool)) storage __milestoneStatus,
         uint256 __projectId,
         uint256 __fundAmount
-    ) internal view returns (uint256, uint256, uint256) {
+    ) private view returns (uint256, uint256, uint256) {
         GameProject memory project = __project[__projectId];
 
         uint256 fundingGoal = project.fundingGoal;
@@ -95,7 +92,7 @@ library FundingLib {
         uint256 __projectId,
         uint256 __currentMilestoneIndex,
         uint256 __fundPerMilestone
-    ) internal {
+    ) private {
         uint256[] memory timestamps = __project[__projectId]
             .milestone
             .timestamps;
@@ -146,9 +143,14 @@ library FundingLib {
 
     function escrowFundsToken(
         uint256 __fundAmount,
-        address __paymentToken
+        address __paymentToken,
+        address __caller
     ) internal {
-        IERC20(__paymentToken).safeTransfer(address(this), __fundAmount);
+        IERC20(__paymentToken).safeTransferFrom(
+            __caller,
+            address(this),
+            __fundAmount
+        );
     }
 
     function transferTokenFromContract(
@@ -156,11 +158,7 @@ library FundingLib {
         address __token,
         address __receiver
     ) internal {
-        IERC20(__token).safeTransferFrom(
-            address(this),
-            __receiver,
-            __fundAmount
-        );
+        IERC20(__token).safeTransfer(__receiver, __fundAmount);
     }
     //
 }

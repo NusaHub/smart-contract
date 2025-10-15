@@ -7,7 +7,6 @@ import {ProjectMilestone} from "./ProjectMilestone.sol";
 
 struct GameProject {
     string name;
-    address token;
     uint256 fundingGoal;
     PaymentToken paymentToken;
     uint256 fundRaised;

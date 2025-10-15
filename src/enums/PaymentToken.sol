@@ -3,6 +3,6 @@
 pragma solidity ^0.8.29;
 
 enum PaymentToken {
-    USDT,
-    IDRX
+    IDRX,
+    USDT
 }

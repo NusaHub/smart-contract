@@ -2,12 +2,10 @@
 
 pragma solidity ^0.8.29;
 
-import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import {Payment} from "./Payment.sol";
 
-contract IDRX is ERC20 {
+contract IDRX is Payment {
     //
-    constructor() ERC20("IDRX", "IDRX") {
-        _mint(msg.sender, 1000000 * 10 ** decimals());
-    }
+    constructor() Payment("IDRX", "IDRX") {}
     //
 }

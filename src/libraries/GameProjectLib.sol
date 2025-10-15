@@ -13,7 +13,6 @@ library GameProjectLib {
         uint256 __projectId,
         string memory __projectName,
         PaymentToken __paymentToken,
-        address __token,
         uint256 __fundingGoal,
         uint256[] memory __timestamps,
         string[] memory __targets,
@@ -21,7 +20,6 @@ library GameProjectLib {
     ) internal {
         __project[__projectId] = GameProject({
             name: __projectName,
-            token: __token,
             paymentToken: __paymentToken,
             fundingGoal: __fundingGoal,
             fundRaised: 0,

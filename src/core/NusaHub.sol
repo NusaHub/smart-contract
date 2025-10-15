@@ -3,6 +3,7 @@
 pragma solidity ^0.8.29;
 
 import "./Imports.sol";
+import {console} from "forge-std/console.sol";
 
 contract NusaHub is
     Initializable,
@@ -21,19 +22,21 @@ contract NusaHub is
     address private _nusa;
 
     mapping(PaymentToken => address) private _paymentToken;
-    mapping(uint256 => GameProject) _project;
-    mapping(uint256 => mapping(address => Funding)) _fundings;
-    mapping(uint256 => mapping(uint256 => Progress)) _progresses;
+    mapping(uint256 => GameProject) private _project;
+    mapping(uint256 => mapping(address => Funding)) private _fundings;
+    mapping(uint256 => mapping(uint256 => Progress)) private _progresses;
 
-    mapping(uint256 => mapping(address => bool)) _investorStatus;
-    mapping(uint256 => mapping(uint256 => bool)) _milestoneStatus;
-    mapping(uint256 => mapping(uint256 => mapping(address => bool))) _hasWithdrawn;
-    mapping(uint256 => mapping(uint256 => uint256)) _fundRaisedPerMilestone;
+    mapping(uint256 => mapping(address => bool)) private _investorStatus;
+    mapping(uint256 => mapping(uint256 => bool)) private _milestoneStatus;
+    mapping(uint256 => mapping(uint256 => mapping(address => bool)))
+        private _hasWithdrawn;
+    mapping(uint256 => mapping(uint256 => uint256))
+        private _fundRaisedPerMilestone;
 
     modifier onlyNonRegisteredProject(uint256 __projectId) {
         GameProject memory project = _project[__projectId];
         require(
-            project.fundingGoal == 0 && project.token == address(0),
+            project.fundingGoal == 0,
             GameProjectError.GameProjectAlreadyRegistered(__projectId)
         );
         _;
@@ -42,7 +45,7 @@ contract NusaHub is
     modifier onlyRegisteredProject(uint256 __projectId) {
         GameProject memory project = _project[__projectId];
         require(
-            project.fundingGoal != 0 && project.token != address(0),
+            project.fundingGoal != 0,
             GameProjectError.GameProjectNotRegistered()
         );
         _;
@@ -130,24 +133,16 @@ contract NusaHub is
     function postProject(
         uint256 __projectId,
         string calldata __projectName,
-        string calldata __projectSymbol,
-        PaymentToken __paymentToken,
+        uint8 __paymentToken,
         uint256 __fundingGoal,
         uint256[] calldata __timestamps,
         string[] calldata __targets
     ) external onlyNonRegisteredProject(__projectId) {
-        address tokenAddress = FactoryLib.generateProjectToken(
-            __projectName,
-            __projectSymbol,
-            __fundingGoal
-        );
-
         GameProjectLib.addToProject(
             _project,
             __projectId,
             __projectName,
-            __paymentToken,
-            tokenAddress,
+            PaymentToken(__paymentToken),
             __fundingGoal,
             __timestamps,
             __targets,
@@ -166,9 +161,6 @@ contract NusaHub is
         uint256 __projectId,
         uint256 __fundAmount
     ) external onlyRegisteredProject(__projectId) {
-        GameProject memory project = _project[__projectId];
-        address projectToken = project.token;
-
         FundingLib.addFundings(
             _project,
             _fundings,
@@ -178,15 +170,13 @@ contract NusaHub is
             __fundAmount,
             _msgSender()
         );
+
         FundingLib.escrowFundsToken(
             __fundAmount,
-            _projectPaymentToken(__projectId)
-        );
-        FundingLib.transferTokenFromContract(
-            __fundAmount,
-            projectToken,
+            _projectPaymentToken(__projectId),
             _msgSender()
         );
+
         _mintNusa(_msgSender(), __fundAmount);
 
         _investorStatus[__projectId][_msgSender()] = true;
@@ -231,10 +221,11 @@ contract NusaHub is
         );
 
         if (__amount != 0) {
-            GameProject memory project = _project[__projectId];
-            address paymentToken = _paymentToken[project.paymentToken];
-
-            FundingLib.escrowFundsToken(__amount, paymentToken);
+            FundingLib.escrowFundsToken(
+                __amount,
+                _projectPaymentToken(__projectId),
+                _msgSender()
+            );
         }
 
         emit ProgressEvent.ProgressUpdated(
@@ -387,10 +378,15 @@ contract NusaHub is
         return _fundRaisedPerMilestone[__projectId][__milestoneTimestampIndex];
     }
 
-    function getPaymentToken(
-        uint256 __projectId
-    ) public view returns (PaymentToken) {
-        return _project[__projectId].paymentToken;
+    function getAvailablePaymentToken()
+        external
+        view
+        returns (address, address)
+    {
+        address idrx = _paymentToken[PaymentToken.IDRX];
+        address usdt = _paymentToken[PaymentToken.USDT];
+
+        return (idrx, usdt);
     }
 
     function _msgSender()

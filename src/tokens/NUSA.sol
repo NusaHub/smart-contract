@@ -35,7 +35,7 @@ contract NUSA is
         __UUPSUpgradeable_init();
     }
 
-    function delegate(string memory __hash) external {
+    function delegateWithHash(string memory __hash) external {
         super.delegate(_msgSender());
         _identities[_msgSender()] = __hash;
     }

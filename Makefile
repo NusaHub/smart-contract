@@ -7,7 +7,8 @@ compile:
 	forge compile
 
 coverage:
-	forge coverage
+	forge coverage --ir-minimum
+
 
 deploy:
 	forge deploy

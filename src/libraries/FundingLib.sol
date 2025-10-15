@@ -3,12 +3,58 @@
 pragma solidity ^0.8.29;
 
 import {GameProject} from "../structs/GameProject.sol";
-import {MilestoneLib} from "../libraries/MilestoneLib.sol";
+import {Funding} from "../structs/Funding.sol";
+import {Progress} from "../structs/Progress.sol";
+import {ProgressLib} from "../libraries/ProgressLib.sol";
 import {PaymentToken} from "../enums/PaymentToken.sol";
+import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 library FundingLib {
     //
-    using MilestoneLib for mapping(uint256 => mapping(uint256 => bool));
+    using ProgressLib for mapping(uint256 => mapping(uint256 => bool));
+    using SafeERC20 for IERC20;
+
+    function addFundings(
+        mapping(uint256 => GameProject) storage __project,
+        mapping(uint256 => mapping(address => Funding)) storage __fundings,
+        mapping(uint256 => mapping(uint256 => bool)) storage __milestoneStatus,
+        mapping(uint256 => mapping(uint256 => uint256))
+            storage __fundRaisedPerMilestone,
+        uint256 __projectId,
+        uint256 __fundAmount,
+        address __funder
+    ) internal {
+        (
+            uint256 currentmilestoneTimestampIndex,
+            uint256 fundPerMilestone,
+            uint256 percentageFundAmount
+        ) = calculateFunding(
+                __project,
+                __milestoneStatus,
+                __projectId,
+                __fundAmount
+            );
+
+        distributeFunding(
+            __project,
+            __fundRaisedPerMilestone,
+            __projectId,
+            currentmilestoneTimestampIndex,
+            fundPerMilestone
+        );
+
+        __project[__projectId].fundRaised += __fundAmount;
+
+        Funding storage funding = __fundings[__projectId][__funder];
+
+        if (funding.amount == 0) {
+            funding.timestamp = block.timestamp;
+            funding.fundPerMilestone = fundPerMilestone;
+            funding.percentageFundAmount = percentageFundAmount;
+        }
+
+        funding.amount += __fundAmount;
+    }
 
     function calculateFunding(
         mapping(uint256 => GameProject) storage __project,
@@ -58,6 +104,63 @@ library FundingLib {
         for (uint256 j = __currentMilestoneIndex; j < totalMilestone; j++) {
             __fundRaisedPerMilestone[__projectId][j] += __fundPerMilestone;
         }
+    }
+
+    function calculateWithdrawAmount(
+        uint256 __projectId,
+        address __user,
+        uint256 __milestoneTimestampIndex,
+        mapping(uint256 => mapping(address => Funding)) storage __fundings,
+        mapping(uint256 => mapping(uint256 => Progress)) storage __progresses
+    ) internal view returns (uint256) {
+        Funding memory funding = __fundings[__projectId][__user];
+
+        uint256 amount = __progresses[__projectId][__milestoneTimestampIndex]
+            .amount;
+
+        return (funding.percentageFundAmount * amount) / 100;
+    }
+
+    function calculateCashOutAmount(
+        uint256 __projectId,
+        address __user,
+        uint256[] storage __timestamps,
+        mapping(uint256 => mapping(address => Funding)) storage __fundings,
+        mapping(uint256 => GameProject) storage __project,
+        mapping(uint256 => mapping(uint256 => bool)) storage __milestoneStatus
+    ) internal view returns (uint256) {
+        Funding memory funding = __fundings[__projectId][__user];
+
+        uint256 totalMilestone = __project[__projectId]
+            .milestone
+            .timestamps
+            .length;
+        uint256 milestoneTimestampIndex = ProgressLib.search(
+            __milestoneStatus,
+            __projectId,
+            __timestamps
+        );
+        uint256 remainingMilestone = totalMilestone - milestoneTimestampIndex;
+        return (funding.fundPerMilestone * remainingMilestone);
+    }
+
+    function escrowFundsToken(
+        uint256 __fundAmount,
+        address __paymentToken
+    ) internal {
+        IERC20(__paymentToken).safeTransfer(address(this), __fundAmount);
+    }
+
+    function transferTokenFromContract(
+        uint256 __fundAmount,
+        address __token,
+        address __receiver
+    ) internal {
+        IERC20(__token).safeTransferFrom(
+            address(this),
+            __receiver,
+            __fundAmount
+        );
     }
     //
 }

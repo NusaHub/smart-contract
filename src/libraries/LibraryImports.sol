@@ -3,5 +3,6 @@
 pragma solidity ^0.8.29;
 
 import {FactoryLib} from "./FactoryLib.sol";
-import {MilestoneLib} from "./MilestoneLib.sol";
+import {ProgressLib} from "./ProgressLib.sol";
 import {FundingLib} from "./FundingLib.sol";
+import {GameProjectLib} from "./GameProjectLib.sol";

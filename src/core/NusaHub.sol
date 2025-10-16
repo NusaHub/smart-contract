@@ -69,19 +69,18 @@ contract NusaHub is
         _;
     }
 
-    modifier onlyIfMilestoneDone(uint256 __projectId) {
-        uint256 milestoneTimestampIndex = _milestoneStatus.search(
-            __projectId,
-            _projectTimestamps(__projectId)
-        );
+    modifier onlyIfMilestoneDone(
+        uint256 __projectId,
+        uint256 __milestoneTimestampIndex
+    ) {
         bool milestoneStatus = _milestoneStatus[__projectId][
-            milestoneTimestampIndex
+            __milestoneTimestampIndex
         ];
         require(
             milestoneStatus,
             ProgressError.IncompleteMilestone(
                 __projectId,
-                milestoneTimestampIndex
+                __milestoneTimestampIndex
             )
         );
         _;
@@ -113,7 +112,7 @@ contract NusaHub is
 
     function initialize(IVotes __token) public initializer {
         __Governor_init("NusaHub Governor");
-        __GovernorSettings_init(5, 25, 0);
+        __GovernorSettings_init(150, 150, 0);
         __GovernorCountingSimple_init();
         __GovernorVotes_init(__token);
         __GovernorVotesQuorumFraction_init(1);
@@ -192,7 +191,6 @@ contract NusaHub is
     function updateProgress(
         uint256 __projectId,
         uint256 __amount,
-        ProgressType __type,
         address[] memory __targets,
         uint256[] memory __values,
         bytes[] memory __calldatas,
@@ -214,7 +212,6 @@ contract NusaHub is
             _milestoneStatus,
             _projectTimestamps(__projectId),
             __projectId,
-            __type,
             __description,
             __amount,
             proposalId
@@ -269,7 +266,7 @@ contract NusaHub is
     )
         external
         onlyRegisteredProject(__projectId)
-        onlyIfMilestoneDone(__projectId)
+        onlyIfMilestoneDone(__projectId, __milestoneTimestampIndex)
         onlyProjectInvestor(__projectId, _msgSender())
         onlyOnceWithdraw(__projectId, __milestoneTimestampIndex, _msgSender())
     {
@@ -429,11 +426,20 @@ contract NusaHub is
             milestoneTimestampIndex
         );
 
+        console.log(fundAmount);
+
+        address gameOwner = _project[__projectId].owner;
+
         FundingLib.transferTokenFromContract(
             fundAmount,
             _projectPaymentToken(__projectId),
-            _msgSender()
+            gameOwner
         );
+
+        console.log(
+            Payment(_projectPaymentToken(__projectId)).balanceOf(msg.sender)
+        );
+        console.log(msg.sender);
 
         _milestoneStatus[__projectId][milestoneTimestampIndex] = true;
     }
@@ -454,5 +460,6 @@ contract NusaHub is
         PaymentToken paymentToken = _project[__projectId].paymentToken;
         return _paymentToken[paymentToken];
     }
+
     //
 }

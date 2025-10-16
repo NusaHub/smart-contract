@@ -3,7 +3,6 @@
 pragma solidity ^0.8.29;
 
 import {Progress} from "../structs/Progress.sol";
-import {ProgressType} from "../enums/ProgressType.sol";
 
 // import {NusaHub} from "../core/NusaHub.sol";
 
@@ -28,7 +27,6 @@ library ProgressLib {
         mapping(uint256 => mapping(uint256 => bool)) storage __milestoneStatus,
         uint256[] storage __timestamps,
         uint256 __projectId,
-        ProgressType __type,
         string memory __text,
         uint256 __amount,
         uint256 __proposalId
@@ -40,7 +38,6 @@ library ProgressLib {
         );
 
         __progresses[__projectId][milestoneTimestampIndex] = Progress({
-            progressType: __type,
             text: __text,
             amount: __amount,
             proposalId: __proposalId

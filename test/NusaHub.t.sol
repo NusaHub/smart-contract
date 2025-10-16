@@ -4,15 +4,16 @@ pragma solidity ^0.8.29;
 import {NusaHubScript} from "../script/NusaHub.s.sol";
 import {Test, console} from "forge-std/Test.sol";
 import {NusaHub} from "../src/core/NusaHub.sol";
+import {NusaGovernor} from "../src/core/NusaGovernor.sol";
 import {NUSA} from "../src/tokens/NUSA.sol";
 import {IDRX} from "../src/tokens/IDRX.sol";
-
 import "../src/core/Imports.sol";
 
 contract NusaHubTest is Test {
     //
     NusaHub private _nusaHub;
     NUSA private _nusaToken;
+    NusaGovernor private _nusaGovernor;
 
     address private constant GAME_OWNER = address(1);
     address private constant INVESTOR = address(2);
@@ -37,10 +38,15 @@ contract NusaHubTest is Test {
 
     function setUp() public {
         NusaHubScript script = new NusaHubScript();
-        (address nusaAddr, address nusaHubAddr) = script.run();
+        (
+            address nusaAddr,
+            address nusaHubAddr,
+            address nusaGovernorAddr
+        ) = script.run();
 
-        _nusaHub = NusaHub(payable(nusaHubAddr));
+        _nusaHub = NusaHub(nusaHubAddr);
         _nusaToken = NUSA(nusaAddr);
+        _nusaGovernor = NusaGovernor(payable(nusaGovernorAddr));
 
         _timestamps.push(block.timestamp + 1 days);
         _timestamps.push(block.timestamp + 2 days);
@@ -194,12 +200,19 @@ contract NusaHubTest is Test {
         Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND);
         Payment(idrx).approve(address(_nusaHub), PROGRESS_FUND);
 
-        _nusaHub.updateProgress(
-            MAIN_PROJECT_ID,
-            PROGRESS_FUND,
+        uint256 proposalId = _nusaGovernor.proposeProgress(
             _targetAddr,
             _values,
             _calldatas,
+            _desc
+        );
+        _nusaHub.updateProgress(
+            MAIN_PROJECT_ID,
+            PROGRESS_FUND,
+            proposalId,
+            // _targetAddr,
+            // _values,
+            // _calldatas,
             _desc
         );
         vm.stopPrank();
@@ -214,7 +227,7 @@ contract NusaHubTest is Test {
         assertEq(progress.amount, PROGRESS_FUND);
         assertEq(
             progress.proposalId,
-            _nusaHub.getProposalId(
+            _nusaGovernor.getProposalId(
                 _targetAddr,
                 _values,
                 _calldatas,
@@ -240,6 +253,12 @@ contract NusaHubTest is Test {
         vm.stopPrank();
 
         vm.startPrank(INVESTOR);
+        uint256 proposalId = _nusaGovernor.proposeProgress(
+            _targetAddr,
+            _values,
+            _calldatas,
+            _desc
+        );
         vm.expectRevert(
             abi.encodeWithSelector(
                 GameProjectError.UnauthorizedCaller.selector,
@@ -250,9 +269,10 @@ contract NusaHubTest is Test {
         _nusaHub.updateProgress(
             MAIN_PROJECT_ID,
             PROGRESS_FUND,
-            _targetAddr,
-            _values,
-            _calldatas,
+            proposalId,
+            // _targetAddr,
+            // _values,
+            // _calldatas,
             _desc
         );
         vm.stopPrank();
@@ -286,25 +306,32 @@ contract NusaHubTest is Test {
         Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND);
         Payment(idrx).approve(address(_nusaHub), PROGRESS_FUND);
 
-        _nusaHub.updateProgress(
-            MAIN_PROJECT_ID,
-            PROGRESS_FUND,
+        uint256 proposalId = _nusaGovernor.proposeProgress(
             _targetAddr,
             _values,
             _calldatas,
             _desc
         );
+        _nusaHub.updateProgress(
+            MAIN_PROJECT_ID,
+            PROGRESS_FUND,
+            proposalId,
+            // _targetAddr,
+            // _values,
+            // _calldatas,
+            _desc
+        );
         vm.stopPrank();
 
-        uint256 proposalId = _nusaHub
-            .getProgresses(MAIN_PROJECT_ID, 0)
-            .proposalId;
-        uint256 voteStart = _nusaHub.proposalSnapshot(proposalId);
+        // uint256 proposalIdentifier = _nusaHub
+        //     .getProgresses(MAIN_PROJECT_ID, 0)
+        //     .proposalId;
+        uint256 voteStart = _nusaGovernor.proposalSnapshot(proposalId);
 
         vm.roll(voteStart + 1);
 
         vm.startPrank(INVESTOR);
-        _nusaHub.voteMilestone(MAIN_PROJECT_ID, 1);
+        _nusaGovernor.voteProgress(proposalId, 1);
         vm.stopPrank();
 
         uint256 expectedAgainstVotes = 0;
@@ -312,7 +339,7 @@ contract NusaHubTest is Test {
             INVESTOR
         );
 
-        (uint256 actualAgainstVotes, uint256 actualForVotes, ) = _nusaHub
+        (uint256 actualAgainstVotes, uint256 actualForVotes, ) = _nusaGovernor
             .proposalVotes(proposalId);
 
         assertEq(expectedAgainstVotes, actualAgainstVotes);
@@ -347,30 +374,37 @@ contract NusaHubTest is Test {
         Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND);
         Payment(idrx).approve(address(_nusaHub), PROGRESS_FUND);
 
-        _nusaHub.updateProgress(
-            MAIN_PROJECT_ID,
-            PROGRESS_FUND,
+        uint256 proposalId = _nusaGovernor.proposeProgress(
             _targetAddr,
             _values,
             _calldatas,
             _desc
         );
+        _nusaHub.updateProgress(
+            MAIN_PROJECT_ID,
+            PROGRESS_FUND,
+            proposalId,
+            // _targetAddr,
+            // _values,
+            // _calldatas,
+            _desc
+        );
         vm.stopPrank();
 
-        uint256 proposalId = _nusaHub
-            .getProgresses(MAIN_PROJECT_ID, 0)
-            .proposalId;
-        uint256 voteStart = _nusaHub.proposalSnapshot(proposalId);
+        // uint256 proposalId = _nusaHub
+        //     .getProgresses(MAIN_PROJECT_ID, 0)
+        //     .proposalId;
+        uint256 voteStart = _nusaGovernor.proposalSnapshot(proposalId);
 
         vm.roll(voteStart + 1);
 
         vm.startPrank(INVESTOR);
-        _nusaHub.voteMilestone(MAIN_PROJECT_ID, 1);
+        _nusaGovernor.voteProgress(proposalId, 1);
         vm.stopPrank();
 
-        vm.roll(block.number + _nusaHub.votingPeriod() + 1);
+        vm.roll(block.number + _nusaGovernor.votingPeriod() + 1);
 
-        _nusaHub.execute(
+        _nusaGovernor.execute(
             _targetAddr,
             _values,
             _calldatas,
@@ -418,30 +452,37 @@ contract NusaHubTest is Test {
         Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND);
         Payment(idrx).approve(address(_nusaHub), PROGRESS_FUND);
 
-        _nusaHub.updateProgress(
-            MAIN_PROJECT_ID,
-            PROGRESS_FUND,
+        uint256 proposalId = _nusaGovernor.proposeProgress(
             _targetAddr,
             _values,
             _calldatas,
             _desc
         );
+        _nusaHub.updateProgress(
+            MAIN_PROJECT_ID,
+            PROGRESS_FUND,
+            proposalId,
+            // _targetAddr,
+            // _values,
+            // _calldatas,
+            _desc
+        );
         vm.stopPrank();
 
-        uint256 proposalId = _nusaHub
-            .getProgresses(MAIN_PROJECT_ID, 0)
-            .proposalId;
-        uint256 voteStart = _nusaHub.proposalSnapshot(proposalId);
+        // uint256 proposalId = _nusaHub
+        //     .getProgresses(MAIN_PROJECT_ID, 0)
+        //     .proposalId;
+        uint256 voteStart = _nusaGovernor.proposalSnapshot(proposalId);
 
         vm.roll(voteStart + 1);
 
         vm.startPrank(INVESTOR);
-        _nusaHub.voteMilestone(MAIN_PROJECT_ID, 1);
+        _nusaGovernor.voteProgress(proposalId, 1);
         vm.stopPrank();
 
-        vm.roll(block.number + _nusaHub.votingPeriod() + 1);
+        vm.roll(block.number + _nusaGovernor.votingPeriod() + 1);
 
-        _nusaHub.execute(
+        _nusaGovernor.execute(
             _targetAddr,
             _values,
             _calldatas,
@@ -494,30 +535,37 @@ contract NusaHubTest is Test {
         Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND);
         Payment(idrx).approve(address(_nusaHub), PROGRESS_FUND);
 
-        _nusaHub.updateProgress(
-            MAIN_PROJECT_ID,
-            PROGRESS_FUND,
+        uint256 proposalId = _nusaGovernor.proposeProgress(
             _targetAddr,
             _values,
             _calldatas,
             _desc
         );
+        _nusaHub.updateProgress(
+            MAIN_PROJECT_ID,
+            PROGRESS_FUND,
+            proposalId,
+            // _targetAddr,
+            // _values,
+            // _calldatas,
+            _desc
+        );
         vm.stopPrank();
 
-        uint256 proposalId = _nusaHub
-            .getProgresses(MAIN_PROJECT_ID, 0)
-            .proposalId;
-        uint256 voteStart = _nusaHub.proposalSnapshot(proposalId);
+        // uint256 proposalId = _nusaHub
+        //     .getProgresses(MAIN_PROJECT_ID, 0)
+        //     .proposalId;
+        uint256 voteStart = _nusaGovernor.proposalSnapshot(proposalId);
 
         vm.roll(voteStart + 1);
 
         vm.startPrank(INVESTOR);
-        _nusaHub.voteMilestone(MAIN_PROJECT_ID, 1);
+        _nusaGovernor.voteProgress(proposalId, 1);
         vm.stopPrank();
 
-        vm.roll(block.number + _nusaHub.votingPeriod() + 1);
+        vm.roll(block.number + _nusaGovernor.votingPeriod() + 1);
 
-        _nusaHub.execute(
+        _nusaGovernor.execute(
             _targetAddr,
             _values,
             _calldatas,
@@ -566,30 +614,37 @@ contract NusaHubTest is Test {
         Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND);
         Payment(idrx).approve(address(_nusaHub), PROGRESS_FUND);
 
-        _nusaHub.updateProgress(
-            MAIN_PROJECT_ID,
-            PROGRESS_FUND,
+        uint256 proposalId = _nusaGovernor.proposeProgress(
             _targetAddr,
             _values,
             _calldatas,
             _desc
         );
+        _nusaHub.updateProgress(
+            MAIN_PROJECT_ID,
+            PROGRESS_FUND,
+            proposalId,
+            // _targetAddr,
+            // _values,
+            // _calldatas,
+            _desc
+        );
         vm.stopPrank();
 
-        uint256 proposalId = _nusaHub
-            .getProgresses(MAIN_PROJECT_ID, 0)
-            .proposalId;
-        uint256 voteStart = _nusaHub.proposalSnapshot(proposalId);
+        // uint256 proposalId = _nusaHub
+        //     .getProgresses(MAIN_PROJECT_ID, 0)
+        //     .proposalId;
+        uint256 voteStart = _nusaGovernor.proposalSnapshot(proposalId);
 
         vm.roll(voteStart + 1);
 
         vm.startPrank(INVESTOR);
-        _nusaHub.voteMilestone(MAIN_PROJECT_ID, 1);
+        _nusaGovernor.voteProgress(proposalId, 1);
         vm.stopPrank();
 
-        vm.roll(block.number + _nusaHub.votingPeriod() + 1);
+        vm.roll(block.number + _nusaGovernor.votingPeriod() + 1);
 
-        _nusaHub.execute(
+        _nusaGovernor.execute(
             _targetAddr,
             _values,
             _calldatas,
@@ -636,30 +691,37 @@ contract NusaHubTest is Test {
         Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND);
         Payment(idrx).approve(address(_nusaHub), PROGRESS_FUND);
 
-        _nusaHub.updateProgress(
-            MAIN_PROJECT_ID,
-            PROGRESS_FUND,
+        uint256 proposalId = _nusaGovernor.proposeProgress(
             _targetAddr,
             _values,
             _calldatas,
             _desc
         );
+        _nusaHub.updateProgress(
+            MAIN_PROJECT_ID,
+            PROGRESS_FUND,
+            proposalId,
+            // _targetAddr,
+            // _values,
+            // _calldatas,
+            _desc
+        );
         vm.stopPrank();
 
-        uint256 proposalId = _nusaHub
-            .getProgresses(MAIN_PROJECT_ID, 0)
-            .proposalId;
-        uint256 voteStart = _nusaHub.proposalSnapshot(proposalId);
+        // uint256 proposalId = _nusaHub
+        //     .getProgresses(MAIN_PROJECT_ID, 0)
+        //     .proposalId;
+        uint256 voteStart = _nusaGovernor.proposalSnapshot(proposalId);
 
         vm.roll(voteStart + 1);
 
         vm.startPrank(INVESTOR);
-        _nusaHub.voteMilestone(MAIN_PROJECT_ID, 1);
+        _nusaGovernor.voteProgress(proposalId, 1);
         vm.stopPrank();
 
-        vm.roll(block.number + _nusaHub.votingPeriod() + 1);
+        vm.roll(block.number + _nusaGovernor.votingPeriod() + 1);
 
-        _nusaHub.execute(
+        _nusaGovernor.execute(
             _targetAddr,
             _values,
             _calldatas,

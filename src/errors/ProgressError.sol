@@ -13,5 +13,7 @@ library ProgressError {
         uint256 milestoneTimestampIndex,
         address investor
     );
+
+    error UnauthorizedGovernor(address governor, address caller);
     //
 }

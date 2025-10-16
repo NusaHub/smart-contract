@@ -3,23 +3,16 @@
 pragma solidity ^0.8.29;
 
 import "./Imports.sol";
-import {console} from "forge-std/console.sol";
 
-contract NusaHub is
-    Initializable,
-    GovernorUpgradeable,
-    GovernorSettingsUpgradeable,
-    GovernorCountingSimpleUpgradeable,
-    GovernorVotesUpgradeable,
-    GovernorVotesQuorumFractionUpgradeable,
-    UUPSUpgradeable,
-    ReentrancyGuardUpgradeable
-{
+// import {NusaGovernor} from "./NusaGovernor.sol";
+
+contract NusaHub is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
     //
     using SafeERC20 for IERC20;
     using ProgressLib for mapping(uint256 => mapping(uint256 => bool));
 
     address private _nusa;
+    address private _governor;
 
     mapping(PaymentToken => address) private _paymentToken;
     mapping(uint256 => GameProject) private _project;
@@ -32,6 +25,14 @@ contract NusaHub is
         private _hasWithdrawn;
     mapping(uint256 => mapping(uint256 => uint256))
         private _fundRaisedPerMilestone;
+
+    modifier onlyGovernance(address __caller) {
+        require(
+            __caller == _governor,
+            ProgressError.UnauthorizedGovernor(_governor, __caller)
+        );
+        _;
+    }
 
     modifier onlyNonRegisteredProject(uint256 __projectId) {
         GameProject memory project = _project[__projectId];
@@ -110,21 +111,19 @@ contract NusaHub is
         _disableInitializers();
     }
 
-    function initialize(IVotes __token) public initializer {
-        __Governor_init("NusaHub Governor");
-        __GovernorSettings_init(150, 150, 0);
-        __GovernorCountingSimple_init();
-        __GovernorVotes_init(__token);
-        __GovernorVotesQuorumFraction_init(1);
+    function initialize(
+        address __idrx,
+        address __usdt,
+        address __token,
+        address __governor
+    ) public initializer {
         __UUPSUpgradeable_init();
 
-        IDRX idrx = new IDRX();
-        USDT usdt = new USDT();
-
-        _paymentToken[PaymentToken.IDRX] = address(idrx);
-        _paymentToken[PaymentToken.USDT] = address(usdt);
+        _paymentToken[PaymentToken.IDRX] = __idrx;
+        _paymentToken[PaymentToken.USDT] = __usdt;
 
         _nusa = address(__token);
+        _governor = __governor;
     }
 
     function _authorizeUpgrade(address newImplementation) internal override {}
@@ -191,22 +190,13 @@ contract NusaHub is
     function updateProgress(
         uint256 __projectId,
         uint256 __amount,
-        address[] memory __targets,
-        uint256[] memory __values,
-        bytes[] memory __calldatas,
+        uint256 __proposalId,
         string memory __description
     )
         external
         onlyRegisteredProject(__projectId)
         onlyProjectCreator(__projectId, _msgSender())
     {
-        uint256 proposalId = propose(
-            __targets,
-            __values,
-            __calldatas,
-            __description
-        );
-
         ProgressLib.addProgress(
             _progresses,
             _milestoneStatus,
@@ -214,7 +204,7 @@ contract NusaHub is
             __projectId,
             __description,
             __amount,
-            proposalId
+            __proposalId
         );
 
         if (__amount != 0) {
@@ -228,33 +218,14 @@ contract NusaHub is
         emit ProgressEvent.ProgressUpdated(
             __projectId,
             __amount,
-            proposalId,
+            __proposalId,
             _blockTimestamp()
         );
     }
 
-    function voteMilestone(
-        uint256 __projectId,
-        uint8 __vote
-    )
-        external
-        onlyRegisteredProject(__projectId)
-        onlyProjectInvestor(__projectId, _msgSender())
-        returns (uint256)
-    {
-        uint256 milestoneTimestampIndex = _milestoneStatus.search(
-            __projectId,
-            _projectTimestamps(__projectId)
-        );
-        uint256 proposalId = _progresses[__projectId][milestoneTimestampIndex]
-            .proposalId;
-
-        emit ProgressEvent.VoteCasted(__projectId, __vote);
-
-        return super.castVote(proposalId, __vote);
-    }
-
-    function processProgress(uint256 __projectId) external onlyGovernance {
+    function processProgress(
+        uint256 __projectId
+    ) external onlyGovernance(_msgSender()) {
         _withdrawFundsForDev(__projectId);
 
         emit ProgressEvent.ProgressProcessed(__projectId);
@@ -270,12 +241,14 @@ contract NusaHub is
         onlyProjectInvestor(__projectId, _msgSender())
         onlyOnceWithdraw(__projectId, __milestoneTimestampIndex, _msgSender())
     {
+        uint256 fundAmount = _progresses[__projectId][__milestoneTimestampIndex]
+            .amount;
+
         uint256 withdrawAmount = FundingLib.calculateWithdrawAmount(
             __projectId,
             _msgSender(),
-            __milestoneTimestampIndex,
             _fundings,
-            _progresses
+            fundAmount
         );
 
         FundingLib.transferTokenFromContract(
@@ -339,13 +312,6 @@ contract NusaHub is
         return _fundings[__projectId][__user];
     }
 
-    function getProgresses(
-        uint256 __projectId,
-        uint256 __milestoneTimestampIndex
-    ) external view returns (Progress memory) {
-        return _progresses[__projectId][__milestoneTimestampIndex];
-    }
-
     function getInvestorStatus(
         uint256 __projectId,
         address __user
@@ -375,6 +341,13 @@ contract NusaHub is
         return _fundRaisedPerMilestone[__projectId][__milestoneTimestampIndex];
     }
 
+    function getProgresses(
+        uint256 __projectId,
+        uint256 __milestoneTimestampIndex
+    ) external view returns (Progress memory) {
+        return _progresses[__projectId][__milestoneTimestampIndex];
+    }
+
     function getAvailablePaymentToken()
         external
         view
@@ -386,33 +359,8 @@ contract NusaHub is
         return (idrx, usdt);
     }
 
-    function _msgSender()
-        internal
-        view
-        override(ContextUpgradeable)
-        returns (address)
-    {
-        return super._msgSender();
-    }
-
-    function proposalThreshold()
-        public
-        view
-        override(GovernorUpgradeable, GovernorSettingsUpgradeable)
-        returns (uint256)
-    {
-        return super.proposalThreshold();
-    }
-
-    function _mintNusa(
-        address __recipient,
-        uint256 __amount
-    ) private nonReentrant {
-        NUSA(_nusa).mint(__recipient, __amount);
-    }
-
-    function _burnNusa(address __user, uint256 __amount) private nonReentrant {
-        NUSA(_nusa).burn(__user, __amount);
+    function _msgSender() private view returns (address) {
+        return msg.sender;
     }
 
     function _withdrawFundsForDev(uint256 __projectId) private {
@@ -426,8 +374,6 @@ contract NusaHub is
             milestoneTimestampIndex
         );
 
-        console.log(fundAmount);
-
         address gameOwner = _project[__projectId].owner;
 
         FundingLib.transferTokenFromContract(
@@ -436,13 +382,41 @@ contract NusaHub is
             gameOwner
         );
 
-        console.log(
-            Payment(_projectPaymentToken(__projectId)).balanceOf(msg.sender)
-        );
-        console.log(msg.sender);
-
         _milestoneStatus[__projectId][milestoneTimestampIndex] = true;
     }
+
+    function _mintNusa(
+        address __recipient,
+        uint256 __amount
+    ) private nonReentrant {
+        NUSA(_nusa).mint(__recipient, __amount);
+    }
+
+    function _burnNusa(address __user, uint256 __amount) private nonReentrant {
+        NUSA(_nusa).burn(__user, __amount);
+    }
+
+    // function _withdrawFundsForDev(uint256 __projectId) private {
+    //     uint256 milestoneTimestampIndex = _milestoneStatus.search(
+    //         __projectId,
+    //         _projectTimestamps(__projectId)
+    //     );
+
+    //     uint256 fundAmount = getFundRaisedPerMilestone(
+    //         __projectId,
+    //         milestoneTimestampIndex
+    //     );
+
+    //     address gameOwner = _project[__projectId].owner;
+
+    //     FundingLib.transferTokenFromContract(
+    //         fundAmount,
+    //         _projectPaymentToken(__projectId),
+    //         gameOwner
+    //     );
+
+    //     _milestoneStatus[__projectId][milestoneTimestampIndex] = true;
+    // }
 
     function _blockTimestamp() private view returns (uint256) {
         return block.timestamp;

@@ -106,16 +106,17 @@ library FundingLib {
     function calculateWithdrawAmount(
         uint256 __projectId,
         address __user,
-        uint256 __milestoneTimestampIndex,
+        // uint256 __milestoneTimestampIndex,
         mapping(uint256 => mapping(address => Funding)) storage __fundings,
-        mapping(uint256 => mapping(uint256 => Progress)) storage __progresses
+        uint256 __amount
+        // mapping(uint256 => mapping(uint256 => Progress)) storage __progresses
     ) internal view returns (uint256) {
         Funding memory funding = __fundings[__projectId][__user];
 
-        uint256 amount = __progresses[__projectId][__milestoneTimestampIndex]
-            .amount;
+        // uint256 amount = __progresses[__projectId][__milestoneTimestampIndex]
+        //     .amount;
 
-        return (funding.percentageFundAmount * amount) / 100;
+        return (funding.percentageFundAmount * __amount) / 100;
     }
 
     function calculateCashOutAmount(

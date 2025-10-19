@@ -12,7 +12,10 @@ import "../src/tokens/TokenImports.sol";
 
 contract NusaHubScript is Script {
     //
-    function run() external returns (address, address, address) {
+    function run()
+        external
+        returns (address, address, address, address, address)
+    {
         // uint256 privKey = vm.envUint("PRIVATE_KEY");
         // address pubKey = vm.addr(privKey);
 
@@ -56,6 +59,8 @@ contract NusaHubScript is Script {
 
         return (
             address(nusaProxy),
+            address(idrx),
+            address(usdt),
             address(nusaHubProxy),
             address(nusaGovernorProxy)
         );

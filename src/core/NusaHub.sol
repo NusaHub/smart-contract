@@ -294,7 +294,7 @@ contract NusaHub is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
 
         _burnNusa(_msgSender(), userTotalBalance);
 
-        _project[__projectId].fundingGoal -= cashOutAmount;
+        _project[__projectId].fundRaised -= cashOutAmount;
 
         _investorStatus[__projectId][_msgSender()] = false;
 

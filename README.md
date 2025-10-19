@@ -8,29 +8,39 @@
 
 The smart contracts in this project are built using the [OpenZeppelin Contracts](https://docs.openzeppelin.com/contracts/5.x/) library to ensure security, modularity, and upgradability.
 
-| 🔧 Purpose                     | 📦 OpenZeppelin Module                                                                                                              | 📄 Description                                                                                 |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| 🪙 Fungible Token (NUSA) | `ERC20`, `ERC20Votes`, `ERC20Permit`                                                                                                | Fungible token with support for on-chain voting and off-chain approvals (via signatures)       |
-| 🗳️ DAO Governance              | `Governor`, `GovernorSettings`, `GovernorCountingSimple`, `GovernorVotes`, `GovernorVotesQuorumFraction`, `GovernorTimelockControl` | Complete DAO module for proposals, voting, and secured execution via timelock                  |
-| 🎟️ NFT Concert Tickets         | `ERC1155`, `ERC1155URIStorage`, `ERC1155Holder`                                                                                     | ERC-1155 NFTs serve as concert tickets, claimable by swapping NUSA earned from beach cleanups. |
-| ⏳ Timelocked Execution        | `TimelockController`                                                                                                                | Adds a delay to proposal execution for enhanced security and transparency                      |
-| 🛡️ Security                    | `ReentrancyGuard`                                                                                                                   | Protects critical functions from reentrancy attacks                                            |
+| 🔧 Purpose                      | 📦 OpenZeppelin Module                                                                                                                                          | 📄 Description                                                                           |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| 🪙 Fungible Token (NUSA)        | `ERC20Upgradeable`, `ERC20VotesUpgradeable`, `ERC20PermitUpgradeable`                                                                                           | Fungible token with support for on-chain voting and off-chain approvals (via signatures) |
+| 🪙 Fungible Token (IDRX & USDT) | `ERC20`                                                                                                                                                         | Standard ERC20 tokens for IDRX and USDT                                                  |
+| 🗳️ DAO Governance (NusaGovernor)             | `GovernorUpgradeable`, `GovernorSettingsUpgradeable`, `GovernorCountingSimpleUpgradeable`, `GovernorVotesUpgradeable`, `GovernorVotesQuorumFractionUpgradeable` | Complete DAO module for proposals, voting, and secured execution            |
+| ⏳ Upgradable & Initialization   | `Initializable`, `UUPSUpgradeable`                                                                                                                              | Allows contract upgradeability using the UUPS proxy pattern and proper initialization    |
+| 🛡️ Security                    | `ReentrancyGuardUpgradeable`                                                                                                                                    | Protects critical functions from reentrancy attacks                                      |
+
 
 ## 🧩 Architecture
 
-    ```
-    ├── smart-contract/
-    │   ├── lib/              # External dependencies or libraries (via forge install)
-    │   ├── scripts/          # Deployment and automation scripts using Forge
-    │   ├── src/              # Main smart contract source files
-    │   │   └── lib/          # Contains reusable code like custom errors and event declarations
-    │   ├── test/             # Smart contract test files (e.g., unit tests)
-    │   ├── .env              # Environment variables (e.g., RPC URL, private key)
-    │   ├── .gitignore        # Git ignore rules
-    │   ├── .gitmodules       # Tracks git submodules (e.g., external contracts/libs)
-    │   ├── Makefile          # Automation commands for building, testing, and deploying
-    │   └── foundry.toml      # Foundry configuration file (e.g., compiler version, optimizer)
-    ```
+```
+├── smart-contract/
+│   ├── lib/                # External dependencies or installed libraries (via forge install)
+│   ├── out/                # Build artifacts generated by Foundry after compilation
+│   ├── script/             # Deployment and automation scripts using Forge
+│   ├── src/                # Main smart contract source files
+│   │   ├── core/           # Core logic and main contract implementations
+│   │   ├── enums/          # Enum type definitions used across contracts
+│   │   ├── errors/         # Custom error definitions for gas-efficient reverts
+│   │   ├── events/         # Event declarations for logging on-chain actions
+│   │   ├── libraries/      # Reusable utility libraries for contracts
+│   │   ├── structs/        # Struct data definitions shared between contracts
+│   │   └── tokens/         # Token-related contract logic (e.g., ERC standards)
+│   ├── test/               # Smart contract test files
+│   ├── .env                # Environment variables (RPC URL, private key, etc.)
+│   ├── .gitignore          # Git ignore rules for temporary and build files
+│   ├── .gitmodules         # Tracks git submodules (external contract sources)
+│   ├── foundry.toml        # Foundry configuration (compiler, optimizer, remappings)
+│   ├── Makefile            # Build, test, and deployment automation commands
+│   └── README.md           # Project documentation and setup guide
+
+```
 
 ## 🧭 How to Run
 
@@ -53,28 +63,22 @@ foundryup
 > cd smart-contract
 ```
 
-### 📚 3. Install Dependencies
-
-```bash
-> make install
-```
-
-### 🔨 4. Compile Contracts
+### 🔨 3. Compile Contracts
 
 ```bash
 > make build
 ```
 
-### 🧪 5. Run Test
+### 🧪 4. Run Test
 
 ```bash
 > make test
 ```
 
-### 🎯 6. Deploy and Verify Contracts
+### 🎯 5. Deploy and Verify Contracts
 
 ```bash
-> make deploy-verify
+> make deploy
 ```
 
 ## 🔐 .env Configuration

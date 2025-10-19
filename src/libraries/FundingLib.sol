@@ -8,7 +8,6 @@ import {Progress} from "../structs/Progress.sol";
 import {ProgressLib} from "../libraries/ProgressLib.sol";
 import {PaymentToken} from "../enums/PaymentToken.sol";
 import {SafeERC20, IERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import {console} from "forge-std/console.sol";
 
 library FundingLib {
     //
@@ -109,12 +108,14 @@ library FundingLib {
         // uint256 __milestoneTimestampIndex,
         mapping(uint256 => mapping(address => Funding)) storage __fundings,
         uint256 __amount
-        // mapping(uint256 => mapping(uint256 => Progress)) storage __progresses
-    ) internal view returns (uint256) {
+    )
+        internal
+        view
+        returns (
+            uint256
+        )
+    {
         Funding memory funding = __fundings[__projectId][__user];
-
-        // uint256 amount = __progresses[__projectId][__milestoneTimestampIndex]
-        //     .amount;
 
         return (funding.percentageFundAmount * __amount) / 100;
     }

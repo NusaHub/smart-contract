@@ -65,6 +65,7 @@ contract NusaHubTest is Test {
     function test_SuccessfullyDelegateWithHash() public {
         vm.startPrank(GAME_OWNER);
         _nusaToken.delegate(GAME_OWNER);
+        console.log(_nusaToken.delegates(address(0x3)));
         _nusaToken.registerIdentity("LOREM IPSUM");
         vm.stopPrank();
 
@@ -430,7 +431,7 @@ contract NusaHubTest is Test {
             MAIN_PROJECT_ID,
             PROJECT_NAME,
             PAYMENT_TOKEN,
-            FUNDING_GOAL,
+            FUNDING_GOAL, // 1000
             _timestamps,
             _targets
         );
@@ -439,17 +440,35 @@ contract NusaHubTest is Test {
         vm.startPrank(INVESTOR);
         (address idrx, ) = _nusaHub.getAvailablePaymentToken();
 
-        Payment(idrx).mint(INVESTOR, INVESTOR_FUND_AMOUNT);
+        Payment(idrx).mint(INVESTOR, INVESTOR_FUND_AMOUNT); // 100
         Payment(idrx).approve(address(_nusaHub), INVESTOR_FUND_AMOUNT);
+
+        console.log(
+            "NUSAHUB: ",
+            Payment(idrx).balanceOf(address(_nusaHub)) / 10 ** 18
+        );
+        console.log(
+            "user: ",
+            Payment(idrx).balanceOf(address(INVESTOR)) / 10 ** 18
+        );
 
         _nusaHub.fundProject(MAIN_PROJECT_ID, INVESTOR_FUND_AMOUNT);
         _nusaToken.delegate(INVESTOR);
         vm.stopPrank();
 
+        // console.log(Payment(idrx).balanceOf(INVESTOR));
+        console.log(
+            "NUSAHUB: ",
+            Payment(idrx).balanceOf(address(_nusaHub)) / 10 ** 18
+        );
+        console.log(
+            "user: ",
+            Payment(idrx).balanceOf(address(INVESTOR)) / 10 ** 18
+        );
         vm.roll(block.number + 1);
 
         vm.startPrank(GAME_OWNER);
-        Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND);
+        Payment(idrx).mint(GAME_OWNER, PROGRESS_FUND); // 200
         Payment(idrx).approve(address(_nusaHub), PROGRESS_FUND);
 
         uint256 proposalId = _nusaGovernor.proposeProgress(
@@ -468,6 +487,15 @@ contract NusaHubTest is Test {
             _desc
         );
         vm.stopPrank();
+
+        console.log(
+            "NUSAHUB: ",
+            Payment(idrx).balanceOf(address(_nusaHub)) / 10 ** 18
+        );
+        console.log(
+            "user: ",
+            Payment(idrx).balanceOf(address(INVESTOR)) / 10 ** 18
+        );
 
         // uint256 proposalId = _nusaHub
         //     .getProgresses(MAIN_PROJECT_ID, 0)
@@ -488,11 +516,26 @@ contract NusaHubTest is Test {
             _calldatas,
             keccak256(bytes(_desc))
         );
+        console.log(
+            "NUSAHUB: ",
+            Payment(idrx).balanceOf(address(_nusaHub)) / 10 ** 18
+        );
+        console.log(
+            "user: ",
+            Payment(idrx).balanceOf(address(INVESTOR)) / 10 ** 18
+        );
 
         vm.startPrank(INVESTOR);
         _nusaHub.withdrawFundsForInvestor(MAIN_PROJECT_ID, 0);
         vm.stopPrank();
-
+        console.log(
+            "NUSAHUB: ",
+            Payment(idrx).balanceOf(address(_nusaHub)) / 10 ** 18
+        );
+        console.log(
+            "user: ",
+            Payment(idrx).balanceOf(address(INVESTOR)) / 10 ** 18
+        );
         bool expectedWithdrawnStatus = true;
         bool actualWithdrawnStatus = _nusaHub.hasWithdrawnStatus(
             MAIN_PROJECT_ID,
@@ -737,11 +780,10 @@ contract NusaHubTest is Test {
         uint256 actualCashOutAmount = Payment(idrx).balanceOf(INVESTOR) -
             ((PROGRESS_FUND * 10) / 100);
 
+        uint256 actualNusaBalance = _nusaToken.balanceOf(INVESTOR);
+
         assertEq(expectedCashOutAmount, actualCashOutAmount);
-        assertEq(
-            _nusaToken.balanceOf(INVESTOR),
-            actualCashOutAmount - ((PROGRESS_FUND * 10) / 100)
-        );
+        assertEq(actualNusaBalance, expectedCashOutAmount);
     }
 
     //

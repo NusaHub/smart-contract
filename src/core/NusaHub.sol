@@ -257,8 +257,6 @@ contract NusaHub is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
             _msgSender()
         );
 
-        _burnNusa(_msgSender(), withdrawAmount);
-
         _hasWithdrawn[__projectId][__milestoneTimestampIndex][
             _msgSender()
         ] = true;
@@ -292,7 +290,11 @@ contract NusaHub is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
             _msgSender()
         );
 
-        _burnNusa(_msgSender(), cashOutAmount);
+        uint256 userTotalBalance = _fundings[__projectId][_msgSender()].amount;
+
+        _burnNusa(_msgSender(), userTotalBalance);
+
+        _project[__projectId].fundingGoal -= cashOutAmount;
 
         _investorStatus[__projectId][_msgSender()] = false;
 
@@ -395,28 +397,6 @@ contract NusaHub is Initializable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
     function _burnNusa(address __user, uint256 __amount) private nonReentrant {
         NUSA(_nusa).burn(__user, __amount);
     }
-
-    // function _withdrawFundsForDev(uint256 __projectId) private {
-    //     uint256 milestoneTimestampIndex = _milestoneStatus.search(
-    //         __projectId,
-    //         _projectTimestamps(__projectId)
-    //     );
-
-    //     uint256 fundAmount = getFundRaisedPerMilestone(
-    //         __projectId,
-    //         milestoneTimestampIndex
-    //     );
-
-    //     address gameOwner = _project[__projectId].owner;
-
-    //     FundingLib.transferTokenFromContract(
-    //         fundAmount,
-    //         _projectPaymentToken(__projectId),
-    //         gameOwner
-    //     );
-
-    //     _milestoneStatus[__projectId][milestoneTimestampIndex] = true;
-    // }
 
     function _blockTimestamp() private view returns (uint256) {
         return block.timestamp;

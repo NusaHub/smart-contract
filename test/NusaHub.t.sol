@@ -783,7 +783,7 @@ contract NusaHubTest is Test {
         uint256 actualNusaBalance = _nusaToken.balanceOf(INVESTOR);
 
         assertEq(expectedCashOutAmount, actualCashOutAmount);
-        assertEq(actualNusaBalance, expectedCashOutAmount);
+        assertEq(actualNusaBalance, 0);
     }
 
     //

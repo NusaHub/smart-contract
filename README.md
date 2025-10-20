@@ -69,7 +69,7 @@ foundryup
 ### 📁 2. Clone Repository
 
 ```bash
-> git clone https://github.com/NusaQuest/smart-contract
+> git clone https://github.com/NusaHub/smart-contract
 > cd smart-contract
 ```
 

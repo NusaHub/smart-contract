@@ -99,11 +99,14 @@ Before running deploy or verification commands, make sure your `.env` file is pr
 # 🔑 Private key of your deployer wallet (NEVER share this)
 PRIVATE_KEY=your_private_key_here
 
-# 🌐 RPC URL of the Sepolia network via Alchemy
-ALCHEMY_URL=https://eth-sepolia.g.alchemy.com/v2/your_alchemy_url
+# 🌐 RPC URL of the target network
+RPC_URL=https://ethereum-sepolia-rpc.publicnode.com
 
-# 🛠️ Etherscan API key for contract verification
-ETHERSCAN_API_KEY=your_etherscan_api_key_here
+# 🛡️ Set verifier type: "etherscan" or "blockscout"
+VERIFIER=blockscout
+
+# 🔗 Custom verifier URL (needed for blockscout)
+VERIFIER_URL=https://eth-sepolia.blockscout.com/api/
 ```
 
 ## 🤝 Contributors

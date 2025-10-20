@@ -24,7 +24,7 @@ contract NusaGovernor is
 
     function initialize(IVotes __token) public initializer {
         __Governor_init("NusaHub Governor");
-        __GovernorSettings_init(150, 150, 0);
+        __GovernorSettings_init(23, 23, 0);
         __GovernorCountingSimple_init();
         __GovernorVotes_init(__token);
         __GovernorVotesQuorumFraction_init(1);

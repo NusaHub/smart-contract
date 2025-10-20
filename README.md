@@ -8,7 +8,7 @@
 
 | Contract         | Description                                                                                       | Blockscout Link                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| NusaHub**      | The main contract that handles project listings, investor funding, and profit distribution.       | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x70eCA90204067293810b64016A76Bcd8B0De5E81) |
+| NusaHub      | The main contract that handles project listings, investor funding, and profit distribution.       | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x70eCA90204067293810b64016A76Bcd8B0De5E81) |
 | NusaGovernor | Governance module used for proposing project milestone progress and voting by investors.          | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x597Bdc34A6746C222E63d3bF76d8a13DE57c5741) |
 | NUSA Token   | Represents the amount of funds invested by investors — not used as an incentive or utility token. | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x5Bb464e581a5c75d784CeaDe999e1d7f7f090eA8) |
 | IDRX (Mock)  | Mock stablecoin pegged to Indonesian Rupiah, used for transaction simulation and testing.         | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0xA97b33227009afB75dcE7023e69FEEeDE42De6a1) |

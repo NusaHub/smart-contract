@@ -4,6 +4,8 @@
 
 🌏 NusaHub is a Web3 crowdfunding platform 🚀 that connects Indonesian game developers 🎮 with global investors 🌍 through milestone-based funding and anti-fraud investor voting ✅. Developers raise funds per milestone, investors review and vote to release payments 💰, ensuring honest and transparent progress 📊. With blockchain-powered security 🔗 and global access 🌐, NusaHub bridges local game innovation 🇮🇩 with the trust and scalability of Web3 🧠.
 
+## 🧾 Contract Addresses (Sepolia Testnet)
+
 | Contract         | Description                                                                                       | Blockscout Link                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | NusaHub**      | The main contract that handles project listings, investor funding, and profit distribution.       | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x70eCA90204067293810b64016A76Bcd8B0De5E81) |

@@ -8,11 +8,11 @@
 
 | Contract         | Description                                                                                       | Blockscout Link                                                                                             |
 | ---------------- | ------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| NusaHub      | The main contract that handles project listings, investor funding, and profit distribution.       | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x3faBEA897a61c1ddee17480120f53bd7A657b40d) |
-| NusaGovernor | Governance module used for proposing project milestone progress and voting by investors.          | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x905849279f39A700126E4deaD600e396DBC282Fa) |
-| NUSA Token   | Represents the amount of funds invested by investors — not used as an incentive or utility token. | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0xD74EdE9f3d29d7530957EcBA0abf944669add0F2) |
-| IDRX (Mock)  | Mock stablecoin pegged to Indonesian Rupiah, used for transaction simulation and testing.         | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x17341f4f4CD774402D066decf1d69A005AA109DD) |
-| USDT (Mock)  | Mock USD-pegged stablecoin for testing cross-stablecoin interactions in a simulated environment.  | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x9e423F55516A5030F608b3453bEE040fD3FFaC22) |
+| NusaHub      | The main contract that handles project listings, investor funding, and profit distribution.       | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0xc43db92273F4Ce13555F0EFb2Fdd08a40F5dd7b3) |
+| NusaGovernor | Governance module used for proposing project milestone progress and voting by investors.          | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0xB8fb48c49B916C566EA9889E64E3202759E16409) |
+| NUSA Token   | Represents the amount of funds invested by investors — not used as an incentive or utility token. | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0x7Ca4B730Ca99362F6a77a67D63Ec521bC6C45f4b) |
+| IDRX (Mock)  | Mock stablecoin pegged to Indonesian Rupiah, used for transaction simulation and testing.         | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0xB4e87A03CdC550288a30CE293651D433E1431856) |
+| USDT (Mock)  | Mock USD-pegged stablecoin for testing cross-stablecoin interactions in a simulated environment.  | [View on Blockscout](https://eth-sepolia.blockscout.com/address/0xf55bab3DB896E274BbA968f197E978491F2402B1) |
 
 ## 🔒 Built with OpenZeppelin Contracts
 
